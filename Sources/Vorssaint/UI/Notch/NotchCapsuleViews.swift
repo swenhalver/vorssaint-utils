@@ -31,11 +31,11 @@ private struct NotchCapsuleRow<Content: View>: View {
 
 private extension Text {
     func capsuleTitle() -> some View {
-        font(Font(CapsuleLayout.titleFont as CTFont)).lineLimit(1)
+        font(Font(CapsuleLayout.titleFont as CTFont)).lineLimit(1).notchThemed()
     }
 
     func capsuleDetail() -> some View {
-        font(Font(CapsuleLayout.detailFont as CTFont)).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
+        font(Font(CapsuleLayout.detailFont as CTFont)).foregroundStyle(.white.opacity(0.62)).lineLimit(1).notchThemed()
     }
 }
 
@@ -49,6 +49,7 @@ private struct NotchCapsuleSymbol: View {
             .foregroundStyle(tint)
             .frame(width: CapsuleLayout.symbolWidth)
             .capsuleCentred(name)
+            .notchThemed()
             .accessibilityHidden(true)
     }
 }
@@ -121,6 +122,7 @@ struct NotchCapsuleNoticeView: View {
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: notice.detail)
         .transaction { $0.disablesAnimations = false }
+        .notchThemed()
     }
 
     private var messageRow: some View {
@@ -149,6 +151,7 @@ struct NotchCapsuleNoticeView: View {
                 .frame(width: CapsuleLayout.symbolWidth, height: side)
         } else if notice.event == .agents, let agent = notice.agent, notice.symbol == agent.symbol {
             NotchAgentMark(provider: agent, size: CapsuleLayout.symbolSize).frame(width: CapsuleLayout.symbolWidth)
+                .notchThemed()
         } else if notice.event == .track {
             NotchCapsuleTrackArtwork(side: min(CapsuleLayout.symbolWidth, CapsuleLayout.artworkSide(geometry)))
                 .frame(width: CapsuleLayout.symbolWidth)
@@ -220,13 +223,15 @@ struct NotchCapsuleRestingView: View {
                     Image(systemName: symbol).font(.system(size: CapsuleLayout.symbolSize))
                         .capsuleCentred(symbol, weight: .regular)
                         .foregroundStyle(tint)
+                        .notchThemed()
                     if let percent = service.power.chargePercent {
                         Text("\(percent)%").font(Font(CapsuleLayout.smallFont as CTFont)).lineLimit(1)
                             .foregroundStyle(tint)
+                            .notchThemed()
                     }
                 case .agents:
-                    NotchAgentRestingWing(leading: true)
-                    NotchAgentRestingWing(leading: false)
+                    NotchAgentRestingWing(leading: true).notchThemed()
+                    NotchAgentRestingWing(leading: false).notchThemed()
                 case .music:
                     if let artwork = music.artwork {
                         NotchMusicCover(artwork: artwork, side: CapsuleLayout.artworkSide(geometry),
@@ -234,6 +239,7 @@ struct NotchCapsuleRestingView: View {
                     }
                     if music.playback?.isPlaying == true {
                         NotchLiveEqualizerBars(bars: 3, barWidth: 2, height: 10, tint: music.artworkTint?.color ?? .white)
+                            .notchThemed()
                     }
                 case .none:
                     EmptyView()
@@ -309,6 +315,7 @@ struct NotchCapsuleMusicStrip: View {
                     }
                 }
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: showsControl)
+                .notchThemed()
                 .padding(.trailing, CapsuleLayout.endPadding)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
@@ -374,6 +381,7 @@ struct NotchCapsuleTimerStrip: View {
             .foregroundStyle(.orange)
             .lineLimit(1).fixedSize()
             .modifier(NotchRollingDigits(value: text, countsDown: !timer.session.countsUp, everySecond: false))
+            .notchThemed()
             // A reading that gains or loses a character, like 10m becoming
             // 9m, resizes the capsule; the service measures the same reading.
             .onChange(of: NotchAgentSupport.readingShape(text)) { _, _ in
@@ -390,6 +398,7 @@ private struct NotchCapsuleAgentMarks: View {
         HStack(spacing: 1) {
             ForEach(providers) { NotchAgentGlyph(provider: $0, size: CapsuleLayout.agentMarkSize(working: providers.count)) }
         }
+        .notchThemed()
     }
 }
 
@@ -416,6 +425,7 @@ private struct NotchCapsuleCompanionMark: View {
                         .frame(width: CapsuleLayout.downloadPercentWidth(l10n.language), alignment: .trailing)
                 }
             }
+            .notchThemed()
         case .agents:
             NotchCapsuleAgentMarks(providers: AgentProvider.allCases.filter { provider in
                 usage.snapshot.live.contains { $0.provider == provider }
@@ -428,6 +438,7 @@ private struct NotchCapsuleCompanionMark: View {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     NotchCapsuleCalendarStrip.clockMark(countdown, now: context.date)
                 }
+                .notchThemed()
             }
         case .timer, .keepAwake, .watch:
             EmptyView()
@@ -467,6 +478,7 @@ struct NotchCapsuleAgentStrip: View {
                         .font(Font(CapsuleLayout.readingFont as CTFont))
                         .foregroundStyle(working.first?.tint ?? .white)
                         .lineLimit(1).fixedSize()
+                        .notchThemed()
                         // A reading that gains a digit, like an hour passing,
                         // widens the capsule; the service measures the same.
                         .onChange(of: NotchAgentSupport.readingShape(text)) { _, _ in
@@ -518,6 +530,7 @@ struct NotchCapsuleDownloadStrip: View {
                     ProgressView().controlSize(.mini).frame(width: CapsuleLayout.spinnerWidth)
                 }
             }
+            .notchThemed()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(name)
@@ -542,6 +555,7 @@ struct NotchCapsuleWatchStrip: View {
             HStack(spacing: CapsuleLayout.spacing) {
                 NotchWatchEye(size: CapsuleLayout.symbolSize, hidden: watch.state == .hidden)
                     .frame(width: CapsuleLayout.symbolWidth)
+                    .notchThemed()
                 if watch.showsThumbnail, let preview = watch.preview {
                     NotchWatchThumbnail(image: preview, height: max(8, geometry.stripBodyHeight - 6))
                 } else if watch.headline.isEmpty {
@@ -549,11 +563,12 @@ struct NotchCapsuleWatchStrip: View {
                     if watch.state == .hidden {
                         Color.clear.frame(width: CapsuleLayout.spinnerWidth, height: 1)
                     } else {
-                        ProgressView().controlSize(.mini).frame(width: CapsuleLayout.spinnerWidth)
+                        ProgressView().controlSize(.mini).frame(width: CapsuleLayout.spinnerWidth).notchThemed()
                     }
                 } else {
                     Text(watch.headline).font(Font(CapsuleLayout.levelFont as CTFont))
                         .lineLimit(1).truncationMode(.tail)
+                        .notchThemed()
                 }
             }
         }
@@ -596,7 +611,7 @@ struct NotchCapsuleCalendarStrip: View {
                         // and the title moves to the tooltip and VoiceOver.
                         HStack(spacing: CapsuleLayout.markGap(.calendar)) {
                             NotchCapsuleCompanionMark(companion: companion, geometry: geometry)
-                            Self.clockMark(countdown, now: context.date)
+                            Self.clockMark(countdown, now: context.date).notchThemed()
                         }
                     } else {
                         HStack(spacing: CapsuleLayout.spacing) {
@@ -617,6 +632,7 @@ struct NotchCapsuleCalendarStrip: View {
                             .padding(.leading, CapsuleLayout.groupSpacing - CapsuleLayout.spacing)
                             .layoutPriority(1)
                         }
+                        .notchThemed()
                     }
                 }
                 .accessibilityElement(children: .ignore)
@@ -709,6 +725,7 @@ struct NotchCapsuleKeepAwakeStrip: View {
                         .capsuleCentred(NotchKeepAwakeSupport.openSymbol, size: CapsuleLayout.readingFont.pointSize)
                 }
             }
+            .notchThemed()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Strings.localized(l10n.language).keepAwakeTitle)

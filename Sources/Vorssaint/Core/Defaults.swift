@@ -856,6 +856,8 @@ enum DefaultsKey {
     static let notchHidesMenuBarIcon = "notchHidesMenuBarIcon" // the island takes the glyph's place while it is on
     static let notchKeepAwakeActivity = "notchKeepAwakeActivity" // a running Keep Awake session in the closed island
     static let notchAgentsCompactColor = "notchAgentsCompactColor" // "#RRGGBB" for the AI marks and readings in the closed island; empty = each agent's own
+    static let notchThemeEnabled = "notchThemeEnabled" // Draws the closed island's icons and readings in one color
+    static let notchThemeColor = "notchThemeColor" // "#RRGGBB" for the closed island's theme
     static let notchKeepAwakeColor = "notchKeepAwakeColor" // "#RRGGBB" for the Keep Awake cup, timer and tile; empty = yellow
     static let notchScratchpad = "notchScratchpad"
     static let notchHoverExpands = "notchHoverExpands"
@@ -1472,6 +1474,8 @@ enum Defaults {
         DefaultsKey.notchHidesMenuBarIcon: false,
         DefaultsKey.notchKeepAwakeActivity: false,
         DefaultsKey.notchKeepAwakeColor: "",
+        DefaultsKey.notchThemeEnabled: false,
+        DefaultsKey.notchThemeColor: "#5AC8FA",
         DefaultsKey.notchAgentsCompactColor: "",
         DefaultsKey.notchScratchpad: true,
         DefaultsKey.notchHoverExpands: true,

@@ -81,6 +81,7 @@ struct NotchAgentStrip: View {
                 .contentShape(Rectangle())
             }
         }
+        .notchThemed()
         .frame(height: geometry.compactActivityContentHeight)
         .padding(.horizontal, geometry.compactActivityHorizontalPadding)
         .padding(.top, geometry.compactActivityTopPadding)

@@ -92,6 +92,7 @@ struct NotchView: View {
                     Image(systemName: "chevron.down").frame(width: 28)
                 }
                 .font(.system(size: 10, weight: .semibold))
+                .notchThemed()
                 .frame(maxHeight: .infinity)
                 .accessibilityHidden(true)
             } else {
@@ -111,10 +112,10 @@ struct NotchView: View {
                         NotchMascotView(look: NotchMascotSupport.look(), size: 20, followsDrag: true)
                             .frame(width: 20, height: 20)
                             .accessibilityHidden(true)
-                        Text(text.dropHint)
+                        Text(text.dropHint).notchThemed()
                     }
                 } else {
-                    Label(text.dropHint, systemImage: "tray.and.arrow.down")
+                    Label(text.dropHint, systemImage: "tray.and.arrow.down").notchThemed()
                 }
             }
                 .font(.system(size: 13, weight: .medium)).foregroundStyle(.white)
@@ -705,9 +706,11 @@ struct NotchRestingStrip: View {
                         case .battery:
                             Image(systemName: batterySymbol).font(.system(size: 12))
                                 .foregroundStyle(batteryTint)
+                                .notchThemed()
                                 .padding(.leading, restingBatteryInset)
                         case .agents:
                             NotchAgentRestingWing(leading: true)
+                                .notchThemed()
                                 .padding(.leading, restingBatteryInset)
                         case .none: EmptyView()
                         }
@@ -723,16 +726,19 @@ struct NotchRestingStrip: View {
                             if music.playback?.isPlaying == true {
                                 NotchLiveEqualizerBars(bars: 3, barWidth: 2, height: 11,
                                                        tint: music.artworkTint?.color ?? .white)
+                                    .notchThemed()
                             }
                         case .battery:
                             if let percent = service.power.chargePercent {
                                 Text("\(percent)%").font(.system(size: 9, weight: .medium)).monospacedDigit()
                                     .foregroundStyle(batteryTint)
                                     .lineLimit(1)
+                                    .notchThemed()
                                     .padding(.trailing, restingBatteryInset)
                             }
                         case .agents:
                             NotchAgentRestingWing(leading: false)
+                                .notchThemed()
                                 .padding(.trailing, restingBatteryInset)
                         case .none: EmptyView()
                         }

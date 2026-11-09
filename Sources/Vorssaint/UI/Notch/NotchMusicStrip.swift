@@ -78,7 +78,7 @@ struct NotchMusicStrip: View {
             HStack(spacing: 0) {
                 HStack(spacing: Layout.spacing) {
                     // The words grow out from behind the cover, which keeps its place.
-                    if named != nil { namedLabel }
+                    if named != nil { namedLabel.notchThemed() }
                     if wing > 0 {
                         // Circular corners, like the strip's, so the two stay parallel.
                         NotchMusicCover(artwork: artwork, side: artworkSide, radius: artworkRadius,
@@ -93,12 +93,12 @@ struct NotchMusicStrip: View {
                 .contentShape(Rectangle())
                 .onHover { if live { service.hoverMusicStrip(.cover, entered: $0) } }
                 Group {
-                    if fillsCameraGap { trackLabel } else { Color.clear }
+                    if fillsCameraGap { trackLabel.notchThemed() } else { Color.clear }
                 }
                 .frame(width: geometry.compactActivityCameraGap, height: geometry.compactActivityContentHeight)
                 .clipped()
                 HStack {
-                    if wing > 0 { bars }
+                    if wing > 0 { bars.notchThemed() }
                 }
                 .padding(.leading, innerInset)
                 .padding(.trailing, barsInset)

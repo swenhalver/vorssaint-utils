@@ -43,6 +43,7 @@ struct NotchCalendarStrip: View {
                                     wings(countdown, title: displayTitle, remaining: remaining)
                                 }
                             }
+                            .notchThemed()
                             .frame(width: geometry.compactActivitySize.width - geometry.compactActivityHorizontalPadding * 2,
                                    height: geometry.compactActivityContentHeight)
                             .contentShape(Rectangle())
@@ -135,6 +136,7 @@ struct NotchCalendarStrip: View {
             Color.clear.frame(width: geometry.compactActivityCameraGap)
             Button { service.openCountdownEvent() } label: {
                 Self.clockMark(countdown, remaining: remaining)
+                    .notchThemed()
                     .padding(.trailing, footer ? rowInset : geometry.compactActivityEdgeInset(boxHeight: 9, radius: 0))
                     .frame(width: geometry.compactActivityWingWidth, height: geometry.compactActivityContentHeight,
                            alignment: .trailing)

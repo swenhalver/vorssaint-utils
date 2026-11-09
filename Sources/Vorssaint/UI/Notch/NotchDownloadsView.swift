@@ -291,6 +291,7 @@ struct NotchDownloadStrip: View {
                                     ? NotchDownloadSupport.percentInset(in: geometry) : 0)
                 .frame(width: geometry.compactActivityWingWidth, alignment: .trailing).clipped()
             }
+            .notchThemed()
             .frame(height: geometry.compactActivityContentHeight)
             .padding(.horizontal, geometry.compactActivityHorizontalPadding)
             .padding(.top, geometry.compactActivityTopPadding)

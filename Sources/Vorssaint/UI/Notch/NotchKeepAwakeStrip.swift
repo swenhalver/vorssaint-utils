@@ -65,6 +65,7 @@ struct NotchKeepAwakeStrip: View {
                 .frame(width: wing, height: height, alignment: .trailing)
             }
             .foregroundStyle(NotchKeepAwakeColor.color(colorRaw))
+            .notchThemed()
             .frame(height: height)
             .contentShape(Rectangle())
         }

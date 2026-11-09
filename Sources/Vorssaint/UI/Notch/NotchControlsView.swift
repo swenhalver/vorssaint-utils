@@ -427,6 +427,38 @@ enum NotchCustomColor {
     }
 }
 
+/// The closed island's optional theme: every icon, reading and notice in it
+/// drawn in one color. Pictures (album art, app icons, the companion, a
+/// watched area) keep their own colors, and the open island is untouched.
+enum NotchTheme {
+    static let defaultColor = "#5AC8FA"
+
+    static func color(enabled: Bool, raw: String) -> Color? {
+        enabled ? NotchCustomColor.color(raw) ?? NotchCustomColor.color(defaultColor) : nil
+    }
+}
+
+/// Recolors what it wraps in the theme color, keeping each pixel's opacity,
+/// so dimmed text stays dimmer. Wrap only views without pictures.
+struct NotchThemeTint: ViewModifier {
+    @AppStorage(DefaultsKey.notchThemeEnabled) private var enabled = false
+    @AppStorage(DefaultsKey.notchThemeColor) private var raw = NotchTheme.defaultColor
+
+    func body(content: Content) -> some View {
+        if let color = NotchTheme.color(enabled: enabled, raw: raw) {
+            // Black, then white, then the theme: every pixel takes the color
+            // whatever it was drawn in.
+            content.colorMultiply(.black).colorInvert().colorMultiply(color)
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func notchThemed() -> some View { modifier(NotchThemeTint()) }
+}
+
 /// The color Keep Awake wears in the island: the cup and timer of its strip
 /// and the fill of its tile. Empty means the original yellow.
 enum NotchKeepAwakeColor {

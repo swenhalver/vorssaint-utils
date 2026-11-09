@@ -51,6 +51,7 @@ struct NotchTimerStrip: View {
                                   : timer.session.isPaused ? "pause.circle" : timer.session.countsUp ? "stopwatch" : "timer")
                                 .font(.system(size: iconSize, weight: .medium))
                                 .foregroundStyle(.orange)
+                                .notchThemed()
                         }
                     }
                 }
@@ -88,6 +89,7 @@ struct NotchTimerStrip: View {
                         .foregroundStyle(.orange)
                         .lineLimit(1).minimumScaleFactor(0.65)
                         .modifier(NotchRollingDigits(value: text, countsDown: !timer.session.countsUp, everySecond: false))
+                        .notchThemed()
                         // A reading that gains or loses a character, like
                         // 10m becoming 9m, resizes the wings; the service
                         // measures the same reading.
@@ -120,18 +122,20 @@ struct NotchCompanionMark: View {
     var body: some View {
         switch companion {
         case .downloads:
-            downloadIndicator
+            downloadIndicator.notchThemed()
         case .agents:
             let working = Self.working
             HStack(spacing: 1) {
                 ForEach(working) { NotchAgentGlyph(provider: $0, size: Self.agentMarkSize(working.count, geometry)) }
             }
+            .notchThemed()
         case .calendar:
             if let countdown = calendar.countdown {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     NotchCalendarStrip.clockMark(countdown, remaining: NotchCalendarSupport.countdownText(
                         until: countdown.target, now: context.date))
                 }
+                .notchThemed()
             }
         case .music:
             NotchMusicCover(artwork: music.artwork, side: geometry.compactMusicArtworkSide,

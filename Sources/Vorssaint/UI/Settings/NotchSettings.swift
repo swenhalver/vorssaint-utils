@@ -101,6 +101,8 @@ struct NotchSettings: View {
     @AppStorage(DefaultsKey.notchHidesMenuBarIcon) private var hidesMenuBarIcon = false
     @AppStorage(DefaultsKey.notchKeepAwakeActivity) private var keepAwakeActivity = false
     @AppStorage(DefaultsKey.notchKeepAwakeColor) private var keepAwakeColor = ""
+    @AppStorage(DefaultsKey.notchThemeEnabled) private var themeEnabled = false
+    @AppStorage(DefaultsKey.notchThemeColor) private var themeColor = NotchTheme.defaultColor
     @AppStorage(DefaultsKey.notchScratchpad) private var scratchpad = true
     @AppStorage(DefaultsKey.brightnessControlEnabled) private var brightnessControlEnabled = false
     @AppStorage(DefaultsKey.clipboardHistoryEnabled) private var clipboardHistoryEnabled = false
@@ -253,6 +255,21 @@ struct NotchSettings: View {
                           caption: liquidGlassIsOn ? text.translucentBackgroundGlassHint : text.translucentBackgroundHint,
                           isOn: liquidGlassIsOn ? .constant(true) : $translucentBackground)
                     .disabled(liquidGlassIsOn)
+            }
+            SettingsCard(title: "Theme") {
+                switchRow("paintpalette", "One color when closed",
+                          caption: "Icons, readings, battery and notifications in the closed island all take one color. Album art, app icons and the companion keep theirs. The open island is unchanged.",
+                          isOn: $themeEnabled)
+                if themeEnabled {
+                    SettingsRow(symbol: "eyedropper", title: "Theme color") {
+                        ColorPicker("Theme color",
+                                    selection: Binding(get: { NotchCustomColor.color(themeColor)
+                                                           ?? NotchCustomColor.color(NotchTheme.defaultColor) ?? .cyan },
+                                                       set: { themeColor = NotchCustomColor.hex($0) ?? themeColor }),
+                                    supportsOpacity: false)
+                            .labelsHidden()
+                    }
+                }
             }
             // Only a display without a camera can float the island.
             if NotchSupport.hasDisplayWithoutNotch {

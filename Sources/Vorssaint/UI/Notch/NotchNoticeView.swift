@@ -69,6 +69,7 @@ struct NotchNoticeView: View {
                 Text(content.compactTitle)
                     .font(Font(NotchNotificationBannerLayout.titleFont as CTFont))
                     .lineLimit(1)
+                    .notchThemed()
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else {
@@ -91,13 +92,14 @@ struct NotchNoticeView: View {
                             .opacity(hidesMascot ? 0 : 1)
                             .animation(nil, value: hidesMascot)
                     } else if notice.event == .agents, let agent = notice.agent, notice.symbol == agent.symbol {
-                        NotchAgentMark(provider: agent, size: 13)
+                        NotchAgentMark(provider: agent, size: 13).notchThemed()
                     } else if notice.event == .track {
                         NotchTrackArtwork(size: min(18, geometry.stripHeight - 6))
                     } else {
                         Image(systemName: notice.symbol)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(tint)
+                            .notchThemed()
                     }
                 }
                 .frame(width: 18)
@@ -108,6 +110,7 @@ struct NotchNoticeView: View {
                     .lineLimit(1)
                     .truncationMode(notice.event == .track ? .tail : .middle)
                     .contentTransition(.numericText())
+                    .notchThemed()
             }
             // A level's mark keeps its place while a shorter reading leaves
             // room it holds for the widest.
@@ -117,7 +120,9 @@ struct NotchNoticeView: View {
         }
     }
 
-    @ViewBuilder private var trailing: some View {
+    private var trailing: some View { trailingContent.notchThemed() }
+
+    @ViewBuilder private var trailingContent: some View {
         if let content = notice.notification {
             // At the far end, as far from it as the sender is from the other
             // one, with the air that fits it beside the camera.

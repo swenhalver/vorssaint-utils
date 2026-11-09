@@ -406,6 +406,7 @@ struct NotchWatchStrip: View {
         Button { service.openActivity(.watch) } label: {
             HStack(spacing: 0) {
                 NotchWatchEye(size: iconSize, hidden: watch.state == .hidden)
+                    .notchThemed()
                     .padding(.leading, iconInset)
                     .frame(width: geometry.compactActivityWingWidth, alignment: .leading)
                     .opacity(geometry.compactActivityWingWidth >= 28 ? 1 : 0)
@@ -433,7 +434,7 @@ struct NotchWatchStrip: View {
             NotchWatchThumbnail(image: preview, height: max(8, geometry.compactActivityContentHeight - 6))
         } else if watch.headline.isEmpty {
             // A hidden window's slashed eye says enough until it is read.
-            if watch.state != .hidden { ProgressView().controlSize(.mini) }
+            if watch.state != .hidden { ProgressView().controlSize(.mini).notchThemed() }
         } else {
             // A reading can change on every pass; rolling each change would
             // keep the closed island animating.
@@ -441,6 +442,7 @@ struct NotchWatchStrip: View {
                 .font(.system(size: textSize, weight: .medium)).monospacedDigit()
                 .foregroundStyle(Self.tint)
                 .lineLimit(1).minimumScaleFactor(0.7).truncationMode(.tail)
+                .notchThemed()
         }
     }
 }
