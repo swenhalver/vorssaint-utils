@@ -393,16 +393,54 @@ enum NotchTileAccent {
         switch self {
         case .selection: return .white
         case .alert: return .red
-        case .awake: return .yellow
+        case .awake: return NotchKeepAwakeColor.color(NotchKeepAwakeColor.current)
         case .timer: return .orange
         }
     }
 
     var glyph: Color {
         switch self {
-        case .selection, .awake, .timer: return .black
+        case .selection, .timer: return .black
+        case .awake: return NotchKeepAwakeColor.glyph(NotchKeepAwakeColor.current)
         case .alert: return .white
         }
+    }
+}
+
+/// A color the person picked for part of the island, stored as "#RRGGBB".
+/// Empty means the part keeps its own color.
+enum NotchCustomColor {
+    static func value(_ raw: String) -> ColorValue? {
+        raw.isEmpty ? nil : ColorValue(text: raw)
+    }
+
+    static func color(_ raw: String) -> Color? {
+        guard let value = value(raw) else { return nil }
+        return Color(red: value.red, green: value.green, blue: value.blue)
+    }
+
+    static func hex(_ color: Color) -> String? {
+        guard let rgb = NSColor(color).usingColorSpace(.sRGB) else { return nil }
+        func byte(_ component: CGFloat) -> Int { Int((min(max(component, 0), 1) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X", byte(rgb.redComponent), byte(rgb.greenComponent),
+                      byte(rgb.blueComponent))
+    }
+}
+
+/// The color Keep Awake wears in the island: the cup and timer of its strip
+/// and the fill of its tile. Empty means the original yellow.
+enum NotchKeepAwakeColor {
+    static var current: String {
+        UserDefaults.standard.string(forKey: DefaultsKey.notchKeepAwakeColor) ?? ""
+    }
+
+    static func color(_ raw: String) -> Color { NotchCustomColor.color(raw) ?? .yellow }
+
+    /// The tile's glyph sits on the fill, so a dark color takes a white one.
+    static func glyph(_ raw: String) -> Color {
+        guard let value = NotchCustomColor.value(raw) else { return .black }
+        let luminance = 0.2126 * value.red + 0.7152 * value.green + 0.0722 * value.blue
+        return luminance > 0.5 ? .black : .white
     }
 }
 
@@ -422,6 +460,8 @@ struct NotchActionTile: View {
     var accent: NotchTileAccent = .selection
     let action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Redraws the tile when the Keep Awake color changes in Settings.
+    @AppStorage(DefaultsKey.notchKeepAwakeColor) private var keepAwakeColor = ""
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {

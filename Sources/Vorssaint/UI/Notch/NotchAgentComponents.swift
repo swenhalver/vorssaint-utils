@@ -146,10 +146,12 @@ struct NotchAgentGlyph: View {
     let provider: AgentProvider
     var size: CGFloat = 13
     var working = true
+    /// Replaces the agent's own color on a one-color mark.
+    var tint: Color? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        NotchAgentGlyphBridge(provider: provider, size: size, animates: working && !reduceMotion)
+        NotchAgentGlyphBridge(provider: provider, size: size, animates: working && !reduceMotion, override: tint)
             // Room for the widest mark, the Claude one, drawn past its size.
             .frame(width: size * 1.45 + 1, height: size * 1.45 + 1)
             .accessibilityHidden(true)
@@ -173,6 +175,7 @@ private struct NotchAgentGlyphBridge: NSViewRepresentable {
     let provider: AgentProvider
     let size: CGFloat
     let animates: Bool
+    var override: Color? = nil
 
     func makeNSView(context: Context) -> NotchAgentAnimationView { NotchAgentAnimationView() }
     func updateNSView(_ view: NotchAgentAnimationView, context: Context) {
@@ -183,7 +186,7 @@ private struct NotchAgentGlyphBridge: NSViewRepresentable {
         case .template(let mark):
             image = mark
             markSize = size * provider.markScale
-            tint = NSColor(provider.tint)
+            tint = NSColor(override ?? provider.tint)
         case .icon(let mark):
             image = mark
             markSize = size * 1.35
@@ -192,7 +195,7 @@ private struct NotchAgentGlyphBridge: NSViewRepresentable {
             image = NSImage(systemSymbolName: provider.symbol, accessibilityDescription: nil)?
                 .withSymbolConfiguration(.init(pointSize: size, weight: .semibold))
             markSize = size
-            tint = NSColor(provider.tint)
+            tint = NSColor(override ?? provider.tint)
         }
         view.configureGlyph(image: image, size: markSize, tint: tint, animates: animates)
     }

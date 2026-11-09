@@ -25,6 +25,7 @@ struct NotchAgentsSettingsControls: View {
     @AppStorage(DefaultsKey.notchAgentsLimitThreshold) private var limitThreshold = NotchAgentSupport.defaultLimitThreshold
     @AppStorage(DefaultsKey.notchAgentsDailyBudget) private var dailyBudget = 0.0
     @AppStorage(DefaultsKey.notchAgentsPriceUpdates) private var priceUpdates = true
+    @AppStorage(DefaultsKey.notchAgentsCompactColor) private var compactColor = ""
     @State private var dragging: NotchAgentCard?
     @State private var roots: [AgentProvider: Bool] = [:]
     @State private var claudeApp: URL?
@@ -102,6 +103,19 @@ struct NotchAgentsSettingsControls: View {
                                       focus: NotchAgentLimitFocus(rawValue: limitFocus) ?? .mostUsed,
                                       provider: claude ? .claude : codex ? .codex : opencode ? .opencode : .copilot)
                     .padding(.leading, settingsRowTextInset)
+            }
+            SettingsRow(symbol: "paintpalette", title: "Closed island color",
+                        caption: "The AI marks, rings and readings while the island is closed. Red and orange still warn when a limit is nearly used up.") {
+                HStack(spacing: 8) {
+                    if !compactColor.isEmpty {
+                        Button("Reset") { compactColor = "" }
+                    }
+                    ColorPicker("Closed island color",
+                                selection: Binding(get: { NotchCustomColor.color(compactColor) ?? .white },
+                                                   set: { compactColor = NotchCustomColor.hex($0) ?? compactColor }),
+                                supportsOpacity: false)
+                        .labelsHidden()
+                }
             }
 
             Divider()
@@ -306,19 +320,20 @@ private struct NotchAgentStripSample: View {
     let focus: NotchAgentLimitFocus
     let provider: AgentProvider
     @ObservedObject private var usage = AgentUsageService.shared
+    @AppStorage(DefaultsKey.notchAgentsCompactColor) private var customColor = ""
     private static let camera: CGFloat = 64
 
     var body: some View {
         NotchAgentReadoutTimeline(readout: readout) { date in
             let working = usage.snapshot.live.first?.provider ?? provider
             HStack(spacing: 0) {
-                NotchAgentGlyph(provider: working, size: 11)
+                NotchAgentGlyph(provider: working, size: 11, tint: NotchCustomColor.color(customColor))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Color.clear.frame(width: Self.camera)
                 Text(reading(at: date))
                     .font(.system(size: 12, weight: .medium))
                     .monospacedDigit()
-                    .foregroundStyle(working.tint)
+                    .foregroundStyle(NotchCustomColor.color(customColor) ?? working.tint)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }

@@ -16,6 +16,7 @@ struct NotchAgentStrip: View {
     @AppStorage(DefaultsKey.notchAgentsReadout) private var readout = NotchAgentReadout.elapsed.rawValue
     @AppStorage(DefaultsKey.notchAgentsLimitDisplay) private var display = NotchAgentLimitDisplay.remaining.rawValue
     @AppStorage(DefaultsKey.notchAgentsLimitFocus) private var focus = NotchAgentLimitFocus.mostUsed.rawValue
+    @AppStorage(DefaultsKey.notchAgentsCompactColor) private var customColor = ""
 
     private func working(_ live: [AgentLiveSession]) -> [AgentProvider] {
         AgentProvider.allCases.filter { provider in live.contains { $0.provider == provider } }
@@ -32,7 +33,8 @@ struct NotchAgentStrip: View {
         // walks the preferences for every font, inset and frame.
         let geometry = displayGeometry ?? service.compactActivityGeometry
         let working = working(live)
-        let tint = working.first?.tint ?? .white
+        let custom = NotchCustomColor.color(customColor)
+        let tint = custom ?? working.first?.tint ?? .white
         let budget = geometry.compactActivityContentHeight - NotchLayout.compactEdgeGap * 2
         let iconSize = min(working.count > 1 ? 11.0 : 14.0, max(8, budget - 4))
         let textSize = NotchAgentSupport.stripTextSize(height: geometry.compactActivityContentHeight)
@@ -44,7 +46,7 @@ struct NotchAgentStrip: View {
             Button { service.openActivity(.agents) } label: {
                 HStack(spacing: 1) {
                     if geometry.compactActivityWingWidth >= 28 {
-                        ForEach(working) { NotchAgentGlyph(provider: $0, size: iconSize) }
+                        ForEach(working) { NotchAgentGlyph(provider: $0, size: iconSize, tint: custom) }
                     }
                 }
                 .padding(.leading, iconInset)
@@ -125,6 +127,7 @@ struct NotchAgentRestingWing: View {
     @ObservedObject private var usage = AgentUsageService.shared
     @AppStorage(DefaultsKey.notchAgentsLimitDisplay) private var display = NotchAgentLimitDisplay.remaining.rawValue
     @AppStorage(DefaultsKey.notchAgentsLimitFocus) private var focus = NotchAgentLimitFocus.mostUsed.rawValue
+    @AppStorage(DefaultsKey.notchAgentsCompactColor) private var customColor = ""
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -136,8 +139,11 @@ struct NotchAgentRestingWing: View {
         let snapshot = usage.snapshot
         let limit = NotchAgentSupport.restingLimit(snapshot, focus: NotchAgentLimitFocus(rawValue: focus) ?? .mostUsed, now: now)
         let used = display == NotchAgentLimitDisplay.used.rawValue
+        let custom = NotchCustomColor.color(customColor)
         if let limit {
-            let tint = agentLimitTint(limit.provider, usedFraction: limit.window.usedFraction)
+            // Red and orange still warn of an allowance running out.
+            let tint = limit.window.usedFraction >= 0.8 || custom == nil
+                ? agentLimitTint(limit.provider, usedFraction: limit.window.usedFraction) : custom!
             if leading {
                 NotchAgentRing(value: used ? limit.window.usedFraction : limit.window.remainingFraction,
                                tint: tint, lineWidth: 2)
@@ -147,17 +153,28 @@ struct NotchAgentRestingWing: View {
                     .font(.system(size: 9, weight: .medium))
                     .monospacedDigit()
                     .lineLimit(1)
+                    .modifier(NotchOptionalForeground(color: custom))
             }
         } else if let provider = AgentProvider.allCases.first(where: snapshot.seen.contains) {
             if leading {
-                NotchAgentMark(provider: provider, size: 10)
+                NotchAgentMark(provider: provider, size: 10, tint: custom)
             } else {
                 Text(AgentFormat.cost(snapshot.usage(.today).total.cost))
                     .font(.system(size: 9, weight: .medium))
+                    .modifier(NotchOptionalForeground(color: custom))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
         }
+    }
+}
+
+/// Applies a picked color, or leaves the inherited one alone when none is set.
+private struct NotchOptionalForeground: ViewModifier {
+    let color: Color?
+
+    func body(content: Content) -> some View {
+        if let color { content.foregroundStyle(color) } else { content }
     }
 }

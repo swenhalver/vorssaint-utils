@@ -100,6 +100,7 @@ struct NotchSettings: View {
     @AppStorage(DefaultsKey.notchAppPanel) private var appPanel = false
     @AppStorage(DefaultsKey.notchHidesMenuBarIcon) private var hidesMenuBarIcon = false
     @AppStorage(DefaultsKey.notchKeepAwakeActivity) private var keepAwakeActivity = false
+    @AppStorage(DefaultsKey.notchKeepAwakeColor) private var keepAwakeColor = ""
     @AppStorage(DefaultsKey.notchScratchpad) private var scratchpad = true
     @AppStorage(DefaultsKey.brightnessControlEnabled) private var brightnessControlEnabled = false
     @AppStorage(DefaultsKey.clipboardHistoryEnabled) private var clipboardHistoryEnabled = false
@@ -427,6 +428,19 @@ struct NotchSettings: View {
             let activities = FeatureStrings.notchActivities(l10n.language)
             SettingsFeatureSwitchRow(symbol: NotchControlItem.keepAwake.symbol, title: activities.keepAwakeActivity,
                                      caption: activities.keepAwakeActivityHint, isOn: $keepAwakeActivity, feature: .keepAwake)
+            SettingsRow(symbol: "paintpalette", title: "Keep Awake color",
+                        caption: "The cup and timer in the island, and the Keep Awake tile.") {
+                HStack(spacing: 8) {
+                    if !keepAwakeColor.isEmpty {
+                        Button("Reset") { keepAwakeColor = "" }
+                    }
+                    ColorPicker("Keep Awake color",
+                                selection: Binding(get: { NotchKeepAwakeColor.color(keepAwakeColor) },
+                                                   set: { keepAwakeColor = NotchCustomColor.hex($0) ?? keepAwakeColor }),
+                                supportsOpacity: false)
+                        .labelsHidden()
+                }
+            }
         case .music:
             let music = FeatureStrings.notchMusicExtras(l10n.language)
             switchRow("music.note", text.playingMusic, isOn: $showPlayingMusic)
