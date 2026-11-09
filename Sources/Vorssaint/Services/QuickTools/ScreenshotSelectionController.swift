@@ -60,6 +60,9 @@ final class ScreenshotSelectionController {
     private var freeze: Bool
     private var includePointer: Bool
     private let showLastRegion: Bool
+    /// The area stays on screen after it is drawn, to be moved or resized,
+    /// and the session opens with the last one; a button takes the shot.
+    fileprivate let adjustsSelection: Bool
     private var hideVorssaintWindows: Bool
     private let otherProtectedWindowIDs: () -> Set<CGWindowID>
     private let baseMode: Mode
@@ -146,7 +149,25 @@ final class ScreenshotSelectionController {
     fileprivate var currentPointerLocation: CGPoint?
 
     /// The last confirmed region, per display, so R repeats it instantly.
-    private static var lastRegion: (displayID: CGDirectDisplayID, viewRect: CGRect)?
+    /// Kept in preferences so the next session can open on it after a relaunch.
+    private static var lastRegion: (displayID: CGDirectDisplayID, viewRect: CGRect)? {
+        get {
+            guard let parts = UserDefaults.standard.string(forKey: DefaultsKey.screenshotLastRegion)?
+                    .split(separator: " ").compactMap({ Double($0) }),
+                  parts.count == 5 else { return nil }
+            return (CGDirectDisplayID(parts[0]),
+                    CGRect(x: parts[1], y: parts[2], width: parts[3], height: parts[4]))
+        }
+        set {
+            guard let newValue else {
+                UserDefaults.standard.removeObject(forKey: DefaultsKey.screenshotLastRegion)
+                return
+            }
+            let rect = newValue.viewRect
+            UserDefaults.standard.set("\(newValue.displayID) \(rect.minX) \(rect.minY) \(rect.width) \(rect.height)",
+                                      forKey: DefaultsKey.screenshotLastRegion)
+        }
+    }
 
     /// True while a session owns the screen. Two surfaces at once would stack
     /// dim over dim and split the keyboard between them, so whichever feature
@@ -173,6 +194,7 @@ final class ScreenshotSelectionController {
     init(freeze: Bool,
          includePointer: Bool,
          showLastRegion: Bool,
+         adjustsSelection: Bool = false,
          hideVorssaintWindows: Bool = true,
          protectedWindowIDs: @escaping () -> Set<CGWindowID> = { [] },
          purpose: String? = nil,
@@ -183,6 +205,7 @@ final class ScreenshotSelectionController {
         self.freeze = freeze
         self.includePointer = includePointer
         self.showLastRegion = showLastRegion
+        self.adjustsSelection = adjustsSelection
         self.hideVorssaintWindows = hideVorssaintWindows
         self.otherProtectedWindowIDs = protectedWindowIDs
         self.purpose = purpose
@@ -262,8 +285,13 @@ final class ScreenshotSelectionController {
                                                strings: strings,
                                                purpose: purpose,
                                                screenCaptureOptions: screenCaptureOptions)
-            if showLastRegion, let last = Self.lastRegion, last.displayID == displayID {
-                panel.overlayView.ghostRect = last.viewRect
+            if let last = Self.lastRegion, last.displayID == displayID {
+                if adjustsSelection, activeMode != .color,
+                   CGRect(origin: .zero, size: screen.frame.size).contains(last.viewRect) {
+                    panel.overlayView.beginAdjusting(last.viewRect)
+                } else if showLastRegion {
+                    panel.overlayView.ghostRect = last.viewRect
+                }
             }
             // Populate the retained backing store before a full-screen
             // opaque panel can expose its black background for one frame.
@@ -607,6 +635,7 @@ final class ScreenshotSelectionController {
     // MARK: - Confirmations (called by the views)
 
     private func confirmSelectionWithKeyboard() {
+        if confirmAdjustedSelection() { return }
         if isPickingColor {
             guard acceptsCaptureInput, !panels.contains(where: { $0.overlayView.isDragging }),
                   let panel = panelUnderMouse() else { return }
@@ -617,6 +646,28 @@ final class ScreenshotSelectionController {
         } else if acceptsWindowClick {
             captureFullDisplayUnderMouse()
         }
+    }
+
+    /// Return takes the area waiting to be adjusted, preferring the display
+    /// under the pointer when more than one holds one.
+    private func confirmAdjustedSelection() -> Bool {
+        guard acceptsCaptureInput, !isPickingColor else { return false }
+        let candidates = panels.filter { $0.overlayView.adjustedSelection != nil }
+        guard let panel = candidates.first(where: { $0 === panelUnderMouse() }) ?? candidates.first,
+              let rect = panel.overlayView.adjustedSelection else { return false }
+        confirmRegion(rect, on: panel)
+        return true
+    }
+
+    /// Drawing a new area on one display drops the one waiting on another.
+    fileprivate func endAdjusting(except kept: ScreenshotOverlayPanel) {
+        panels.filter { $0 !== kept }.forEach { $0.overlayView.endAdjusting() }
+    }
+
+    /// The button under an adjusted area records for the recorder and
+    /// captures otherwise.
+    fileprivate var confirmsByRecording: Bool {
+        activeMode == .geometry && !scrollingCaptureEnabled && activeTool == .recording
     }
 
     /// The surfaces stop answering the pointer the instant a picture starts
@@ -1060,8 +1111,34 @@ private final class ScreenshotOverlayView: NSView {
         didSet {
             refreshGuideVisibility()
             refreshFullScreenControlVisibility()
+            refreshConfirmControl()
             needsDisplay = true
         }
+    }
+
+    /// The selection is drawn and waits to be moved, resized or taken.
+    private(set) var isAdjusting = false
+    private enum AdjustHandle: CaseIterable {
+        case topLeft, top, topRight, right, bottomRight, bottom, bottomLeft, left
+    }
+    private enum DragAction {
+        case draw
+        case move(CGRect)
+        case resize(AdjustHandle, CGRect)
+    }
+    private var dragAction = DragAction.draw
+    /// The adjusted area a press outside it replaced, put back if the press
+    /// turns out to be a click rather than a new drag.
+    private var replacedSelection: CGRect?
+    private let confirmHost: PassThroughHostingView<SelectionConfirmButton>
+
+    var adjustedSelection: CGRect? {
+        isAdjusting && !isDragging && selection.width >= 1 && selection.height >= 1 ? selection : nil
+    }
+    /// A tool change keeps the area being adjusted, unless the new tool
+    /// picks a color instead of an area.
+    var keepsAdjustedSelection: Bool {
+        isAdjusting && controller?.isPickingColor == false
     }
 
     var isDragging: Bool { dragOrigin != nil }
@@ -1126,6 +1203,13 @@ private final class ScreenshotOverlayView: NSView {
             },
             hoverChanged: { hoverRelay.update($0) }))
         fullScreenHost = fullScreen
+        confirmHost = PassThroughHostingView(interactiveRootView: SelectionConfirmButton(
+            recording: false,
+            action: { [weak controller, weak panel] in
+                guard let controller, let panel,
+                      let rect = panel.overlayView.adjustedSelection else { return }
+                controller.confirmRegion(rect, on: panel)
+            }))
         super.init(frame: frame)
         hoverRelay.changed = { [weak self] in self?.fullScreenControlHoverChanged($0) }
         let tracking = NSTrackingArea(rect: .zero,
@@ -1135,8 +1219,102 @@ private final class ScreenshotOverlayView: NSView {
         addTrackingArea(tracking)
         addSubview(guideHost)
         addSubview(fullScreenHost)
+        addSubview(confirmHost)
         refreshGuideVisibility()
         refreshFullScreenControlVisibility()
+        refreshConfirmControl()
+    }
+
+    // MARK: Adjusting
+
+    func beginAdjusting(_ rect: CGRect) {
+        selection = ScreenshotSupport.clamp(rect, to: bounds)
+        isAdjusting = true
+        ghostRect = nil
+        refreshConfirmControl()
+        needsDisplay = true
+    }
+
+    func endAdjusting() {
+        guard isAdjusting else { return }
+        isAdjusting = false
+        if !isDragging { selection = .zero }
+        refreshConfirmControl()
+        needsDisplay = true
+    }
+
+    func refreshConfirmControl() {
+        let shown = adjustedSelection != nil && !isCapturePending && controller?.acceptsCaptureInput == true
+        confirmHost.isHidden = !shown
+        guard shown else { return }
+        let recording = controller?.confirmsByRecording ?? false
+        if confirmHost.rootView.recording != recording {
+            confirmHost.rootView = SelectionConfirmButton(recording: recording, action: confirmHost.rootView.action)
+        }
+        let size = confirmHost.fittingSize
+        let width = max(size.width, 1), height = max(size.height, 34)
+        var y = selection.maxY + 14
+        if y + height > bounds.maxY - 8 { y = selection.minY - height - 14 }
+        if y < 8 { y = selection.maxY - height - 12 }
+        let x = min(max(selection.midX - width / 2, 8), bounds.maxX - width - 8)
+        confirmHost.frame = CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    private func handleRects() -> [(AdjustHandle, CGRect)] {
+        let r = selection, s: CGFloat = 16
+        func box(_ x: CGFloat, _ y: CGFloat) -> CGRect { CGRect(x: x - s / 2, y: y - s / 2, width: s, height: s) }
+        return [(.topLeft, box(r.minX, r.minY)), (.topRight, box(r.maxX, r.minY)),
+                (.bottomRight, box(r.maxX, r.maxY)), (.bottomLeft, box(r.minX, r.maxY)),
+                (.top, CGRect(x: r.minX + s / 2, y: r.minY - 5, width: max(0, r.width - s), height: 10)),
+                (.bottom, CGRect(x: r.minX + s / 2, y: r.maxY - 5, width: max(0, r.width - s), height: 10)),
+                (.left, CGRect(x: r.minX - 5, y: r.minY + s / 2, width: 10, height: max(0, r.height - s))),
+                (.right, CGRect(x: r.maxX - 5, y: r.minY + s / 2, width: 10, height: max(0, r.height - s)))]
+    }
+
+    private func handle(at point: CGPoint) -> AdjustHandle? {
+        guard adjustedSelection != nil else { return nil }
+        return handleRects().first { $0.1.contains(point) }?.0
+    }
+
+    private static func resized(_ start: CGRect, by handle: AdjustHandle, to point: CGPoint,
+                                in bounds: CGRect) -> CGRect {
+        let p = CGPoint(x: min(max(point.x, bounds.minX), bounds.maxX),
+                        y: min(max(point.y, bounds.minY), bounds.maxY))
+        var minX = start.minX, maxX = start.maxX, minY = start.minY, maxY = start.maxY
+        switch handle {
+        case .topLeft: minX = p.x; minY = p.y
+        case .top: minY = p.y
+        case .topRight: maxX = p.x; minY = p.y
+        case .right: maxX = p.x
+        case .bottomRight: maxX = p.x; maxY = p.y
+        case .bottom: maxY = p.y
+        case .bottomLeft: minX = p.x; maxY = p.y
+        case .left: minX = p.x
+        }
+        return CGRect(x: min(minX, maxX), y: min(minY, maxY),
+                      width: max(abs(maxX - minX), 4), height: max(abs(maxY - minY), 4))
+    }
+
+    private static func moved(_ start: CGRect, by delta: CGPoint, in bounds: CGRect) -> CGRect {
+        var rect = start.offsetBy(dx: delta.x, dy: delta.y)
+        rect.origin.x = min(max(rect.minX, bounds.minX), bounds.maxX - rect.width)
+        rect.origin.y = min(max(rect.minY, bounds.minY), bounds.maxY - rect.height)
+        return rect
+    }
+
+    private func adjustCursor(at point: CGPoint) -> NSCursor? {
+        var reshaping = false
+        if case .draw = dragAction {} else { reshaping = isDragging }
+        guard adjustedSelection != nil || reshaping else { return nil }
+        if case .move = dragAction, isDragging { return .closedHand }
+        let active: AdjustHandle?
+        if case .resize(let handle, _) = dragAction, isDragging { active = handle } else { active = handle(at: point) }
+        switch active {
+        case .left, .right: return .resizeLeftRight
+        case .top, .bottom: return .resizeUpDown
+        case .some: return .crosshair
+        case nil: return selection.contains(point) ? .openHand : nil
+        }
     }
 
     @available(*, unavailable)
@@ -1152,7 +1330,9 @@ private final class ScreenshotOverlayView: NSView {
     private func refreshCursor(at point: CGPoint) {
         let overControl = pointerIsOverFullScreenControl(point)
             || (!guideHost.isHidden && !guideHost.passesThrough && guideHost.frame.contains(point))
-        (overControl ? NSCursor.arrow : NSCursor.crosshair).set()
+            || (!confirmHost.isHidden && confirmHost.frame.contains(point))
+        if overControl { NSCursor.arrow.set(); return }
+        (adjustCursor(at: point) ?? NSCursor.crosshair).set()
     }
 
     override func layout() {
@@ -1238,7 +1418,13 @@ private final class ScreenshotOverlayView: NSView {
 
     func captureToolDidChange() {
         dragOrigin = nil
-        selection = .zero
+        if keepsAdjustedSelection {
+            refreshConfirmControl()
+        } else {
+            isAdjusting = false
+            selection = .zero
+            refreshConfirmControl()
+        }
         hoveredWindow = nil
         refreshGuideVisibility()
         refreshCaptureGuide()
@@ -1307,6 +1493,30 @@ private final class ScreenshotOverlayView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         pointerIsInside = true
         hoverPoint = point
+        if let current = adjustedSelection, let controller, let panel, !controller.isPickingColor {
+            if event.clickCount >= 2, current.contains(point) {
+                controller.confirmRegion(current, on: panel)
+                return
+            }
+            if let handle = handle(at: point) {
+                dragAction = .resize(handle, current)
+            } else if current.contains(point) {
+                dragAction = .move(current)
+            }
+            if case .draw = dragAction {} else {
+                dragOrigin = point
+                lastDragPoint = point
+                confirmHost.isHidden = true
+                refreshCursor(at: point)
+                needsDisplay = true
+                return
+            }
+        }
+        dragAction = .draw
+        replacedSelection = adjustedSelection
+        if let panel { controller?.endAdjusting(except: panel) }
+        isAdjusting = false
+        confirmHost.isHidden = true
         dragOrigin = point
         controller?.setSelectionInProgress(true)
         lastDragPoint = point
@@ -1324,6 +1534,20 @@ private final class ScreenshotOverlayView: NSView {
             lastDragPoint = point
             needsDisplay = true
             return
+        }
+        switch dragAction {
+        case .move(let start):
+            selection = Self.moved(start, by: CGPoint(x: point.x - origin.x, y: point.y - origin.y), in: bounds)
+            lastDragPoint = point
+            needsDisplay = true
+            return
+        case .resize(let handle, let start):
+            selection = Self.resized(start, by: handle, to: point, in: bounds)
+            lastDragPoint = point
+            needsDisplay = true
+            return
+        case .draw:
+            break
         }
         if controller.spaceIsDown, selection.width > 0 {
             // Space pans the selection instead of resizing it.
@@ -1350,6 +1574,20 @@ private final class ScreenshotOverlayView: NSView {
         dragOrigin = nil
         controller.spaceIsDown = false
 
+        switch dragAction {
+        case .move, .resize:
+            // Moving or resizing keeps the area waiting for the button.
+            dragAction = .draw
+            refreshConfirmControl()
+            refreshCursor(at: point)
+            needsDisplay = true
+            return
+        case .draw:
+            break
+        }
+        let replaced = replacedSelection
+        replacedSelection = nil
+
         if controller.isPickingColor {
             selection = .zero
             controller.confirmColor(at: point, on: panel)
@@ -1359,6 +1597,12 @@ private final class ScreenshotOverlayView: NSView {
         let clicked = ScreenshotSupport.isClick(from: origin, to: point)
         // A click's few pixels of travel are not a selection.
         if clicked { selection = .zero }
+        if clicked, let replaced {
+            // A click beside an area being adjusted keeps that area.
+            beginAdjusting(replaced)
+            controller.setSelectionInProgress(false)
+            return
+        }
         if clicked, let ghostRect = clickableGhostRect(at: point) {
             // A click inside the outline of the last selection takes that
             // selection again, the same as pressing R.
@@ -1379,6 +1623,12 @@ private final class ScreenshotOverlayView: NSView {
             selection = .zero
             controller.setSelectionInProgress(false)
             needsDisplay = true
+            return
+        }
+        if controller.adjustsSelection, !controller.isPickingColor {
+            beginAdjusting(selection)
+            controller.setSelectionInProgress(false)
+            refreshCursor(at: point)
             return
         }
         controller.confirmRegion(selection, on: panel)
@@ -1434,7 +1684,7 @@ private final class ScreenshotOverlayView: NSView {
         hoverPoint = point
         hoveredWindow = highlightWindows && controller?.acceptsWindowClick == true
                 && !pointerIsOverFullScreenControl(point)
-                && clickableGhostRect(at: point) == nil
+                && clickableGhostRect(at: point) == nil && !isAdjusting
             ? ScreenshotSupport.window(at: point, in: windows)
             : nil
     }
@@ -1544,6 +1794,25 @@ private final class ScreenshotOverlayView: NSView {
         context.setStrokeColor(CGColor(gray: 1, alpha: 0.95))
         context.setLineWidth(1)
         context.strokePath()
+
+        if isAdjusting {
+            for (handle, rect) in handleRects() {
+                let center = CGPoint(x: rect.midX, y: rect.midY)
+                let dot: CGRect
+                switch handle {
+                case .topLeft, .topRight, .bottomRight, .bottomLeft:
+                    dot = CGRect(x: center.x - 4.5, y: center.y - 4.5, width: 9, height: 9)
+                default:
+                    guard selection.width > 40, selection.height > 40 else { continue }
+                    dot = CGRect(x: center.x - 3.5, y: center.y - 3.5, width: 7, height: 7)
+                }
+                context.setFillColor(CGColor(gray: 1, alpha: 1))
+                context.fillEllipse(in: dot)
+                context.setStrokeColor(CGColor(srgbRed: 0.18, green: 0.55, blue: 1, alpha: 1))
+                context.setLineWidth(1.5)
+                context.strokeEllipse(in: dot)
+            }
+        }
 
         let pixelWidth = Int((selection.width * pixelScale).rounded())
         let pixelHeight = Int((selection.height * pixelScale).rounded())
@@ -1840,6 +2109,34 @@ private final class PassThroughHostingView<Content: View>: NSHostingView<Content
     }
     override func hitTest(_ point: NSPoint) -> NSView? {
         passesThrough ? nil : super.hitTest(point)
+    }
+}
+
+/// Takes the adjusted area: Capture for a picture, Record for the recorder.
+private struct SelectionConfirmButton: View {
+    let recording: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Label(recording ? "Record" : "Capture", systemImage: recording ? "record.circle" : "camera.fill")
+                .font(.callout.weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 16)
+                .frame(minHeight: 34)
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
+        .background(Capsule(style: .continuous)
+            .fill(recording ? Color.red : Color.accentColor)
+            .brightness(isHovered ? 0.06 : 0))
+        .scaleEffect(isHovered ? 1.03 : 1)
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .onHover { isHovered = $0 }
+        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+        .help("Return")
     }
 }
 

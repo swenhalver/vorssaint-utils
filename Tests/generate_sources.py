@@ -2147,6 +2147,7 @@ def main():
           + 'func confirmColor(at point: CGPoint, on panel: ScreenshotOverlayPanel) { actions.append("color") }\n'
           + "func panelUnderMouse() -> ScreenshotOverlayPanel? { draggingPanel }\n"
           + 'func repeatLastRegion() { actions.append("repeat") }\n'
+          + "func confirmAdjustedSelection() -> Bool { false }\n"
           + "func selectCaptureTool(for event: NSEvent) -> Bool { false }\n"
           + "static func isScrollingCaptureKey(_ event: NSEvent) -> Bool { false }\n"
           + "static func isLoupeKey(_ event: NSEvent) -> Bool { false }\n"

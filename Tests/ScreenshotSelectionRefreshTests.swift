@@ -59,6 +59,9 @@ enum ScreenshotSelectionRefreshContract {
         var pointerIsInside = false
         var hoveredWindow: ScreenshotSupport.PickableWindow?
         var ghostRect: CGRect?
+        var isAdjusting = false
+        var keepsAdjustedSelection: Bool { false }
+        func refreshConfirmControl() {}
         var highlightWindows = true
         var needsLayout = false, needsDisplay = false
         var guideVisibilityRefreshes = 0
@@ -145,6 +148,7 @@ enum ScreenshotSelectionRefreshContract {
         typealias RecorderSupport = ScreenshotSelectionRefreshContract.RecorderSupport
         typealias QuickToolsSupport = ScreenshotSelectionRefreshContract.QuickToolsSupport
         enum Mode { case image, geometry, color }
+        func confirmAdjustedSelection() -> Bool { false }
         struct Capture {
             let image: CGImage
             let scale: CGFloat

@@ -24,6 +24,7 @@ struct ScreenshotCaptureSettings: View {
     @AppStorage(DefaultsKey.screenshotFileNumberNext) private var nextNumber = 1
     @AppStorage(DefaultsKey.screenshotIncludePointer) private var includePointer = false
     @AppStorage(DefaultsKey.screenshotShowLastRegion) private var showLastRegion = true
+    @AppStorage(DefaultsKey.screenshotAdjustSelection) private var adjustSelection = false
     @AppStorage(DefaultsKey.screenshotHighlightWindows) private var highlightWindows = true
     @AppStorage(DefaultsKey.screenshotLoupeStartsOn) private var loupeStartsOn = false
     @AppStorage(DefaultsKey.screenshotLoupeRememberZoom) private var rememberLoupeZoom = false
@@ -143,6 +144,10 @@ struct ScreenshotCaptureSettings: View {
                 }
                 .pickerStyle(.segmented)
                 Toggle(strings.pointerToggle, isOn: $includePointer)
+                Toggle("Adjust the area before capturing", isOn: $adjustSelection)
+                Text("Opens on the last area. Move it or drag its edges, then press Capture, Record or Return. Double-click inside the area to take it too.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle(strings.lastRegionToggle, isOn: $showLastRegion)
                 Toggle(strings.highlightWindowsToggle, isOn: $highlightWindows)
                 Text(strings.highlightWindowsCaption)

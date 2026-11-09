@@ -211,6 +211,7 @@ final class ScreenCaptureService: ObservableObject {
             freeze: policy.freeze,
             includePointer: policy.includePointer,
             showLastRegion: defaults.bool(forKey: DefaultsKey.screenshotShowLastRegion),
+            adjustsSelection: defaults.bool(forKey: DefaultsKey.screenshotAdjustSelection),
             hideVorssaintWindows: policy.hideVorssaintWindows,
             protectedWindowIDs: { [weak options] in
                 var windows: Set<CGWindowID> = []

@@ -697,6 +697,8 @@ enum DefaultsKey {
     static let screenshotDefaultAction = "screenshotDefaultAction"
     static let screenshotIncludePointer = "screenshotIncludePointer"
     static let screenshotShowLastRegion = "screenshotShowLastRegion"
+    static let screenshotAdjustSelection = "screenshotAdjustSelection" // open on the last area and wait for a button to capture
+    static let screenshotLastRegion = "screenshotLastRegion" // "displayID x y width height" of the last captured area
     static let screenshotHighlightWindows = "screenshotHighlightWindows"
     static let screenshotLoupeStartsOn = "screenshotLoupeStartsOn"
     static let screenshotLoupeRememberZoom = "screenshotLoupeRememberZoom"
@@ -1932,6 +1934,7 @@ enum Defaults {
         DefaultsKey.screenshotDefaultAction: "",
         DefaultsKey.screenshotIncludePointer: false,
         DefaultsKey.screenshotShowLastRegion: true,
+        DefaultsKey.screenshotAdjustSelection: false,
         DefaultsKey.screenshotHighlightWindows: true,
         DefaultsKey.screenshotLoupeStartsOn: false,
         DefaultsKey.screenshotLoupeRememberZoom: false,

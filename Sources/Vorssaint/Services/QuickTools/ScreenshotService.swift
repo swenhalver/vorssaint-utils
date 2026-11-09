@@ -296,6 +296,7 @@ final class ScreenshotService: ObservableObject {
                 : defaults.bool(forKey: DefaultsKey.screenshotFreeze),
             includePointer: defaults.bool(forKey: DefaultsKey.screenshotIncludePointer),
             showLastRegion: defaults.bool(forKey: DefaultsKey.screenshotShowLastRegion),
+            adjustsSelection: defaults.bool(forKey: DefaultsKey.screenshotAdjustSelection),
             hideVorssaintWindows: hideVorssaintWindows,
             protectedWindowIDs: { [weak self] in self?.protectedWindowIDs ?? [] },
             purpose: mode == .scrolling ? strings.scrollingCaptureTitle : nil,
