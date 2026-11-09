@@ -1357,6 +1357,14 @@ private final class ScreenshotOverlayView: NSView {
         }
 
         let clicked = ScreenshotSupport.isClick(from: origin, to: point)
+        // A click's few pixels of travel are not a selection.
+        if clicked { selection = .zero }
+        if clicked, let ghostRect = clickableGhostRect(at: point) {
+            // A click inside the outline of the last selection takes that
+            // selection again, the same as pressing R.
+            controller.confirmRegion(ghostRect, on: panel)
+            return
+        }
         if clicked {
             if controller.acceptsWindowClick,
                let target = ScreenshotSupport.window(at: point, in: windows) {
@@ -1426,8 +1434,19 @@ private final class ScreenshotOverlayView: NSView {
         hoverPoint = point
         hoveredWindow = highlightWindows && controller?.acceptsWindowClick == true
                 && !pointerIsOverFullScreenControl(point)
+                && clickableGhostRect(at: point) == nil
             ? ScreenshotSupport.window(at: point, in: windows)
             : nil
+    }
+
+    /// The last selection's outline when a click at `point` would take it
+    /// again: shown, on this display, and with nothing being dragged.
+    private func clickableGhostRect(at point: CGPoint) -> CGRect? {
+        guard let ghostRect, selection == .zero, !isCapturePending,
+              let controller, !controller.isPickingColor,
+              ghostRect.width >= 1, ghostRect.height >= 1,
+              ghostRect.contains(point) else { return nil }
+        return ghostRect
     }
 
     private func fullScreenControlHoverChanged(_ hovered: Bool) {

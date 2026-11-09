@@ -58,6 +58,7 @@ enum ScreenshotSelectionRefreshContract {
         var hoverPoint = CGPoint.zero
         var pointerIsInside = false
         var hoveredWindow: ScreenshotSupport.PickableWindow?
+        var ghostRect: CGRect?
         var highlightWindows = true
         var needsLayout = false, needsDisplay = false
         var guideVisibilityRefreshes = 0

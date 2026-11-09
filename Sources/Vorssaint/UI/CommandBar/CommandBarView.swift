@@ -101,6 +101,14 @@ struct CommandBarView: View {
                 saveTask?.cancel()
                 let task = DispatchWorkItem { [weak self] in
                     guard let self else { return }
+                    // performDrag(with:) can hand the drag to the window
+                    // server and return at once. Saving then would record the
+                    // spot the drag started from and stop listening before the
+                    // bar arrives, so wait for the button to come up.
+                    if NSEvent.pressedMouseButtons & 1 != 0 {
+                        self.scheduleSave()
+                        return
+                    }
                     if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
                     moveObserver = nil
                     saveTask = nil

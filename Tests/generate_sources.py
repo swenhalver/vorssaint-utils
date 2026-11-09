@@ -2111,6 +2111,7 @@ def main():
           + declaration(selection, "    func refreshFullScreenControlVisibility()")
           + declaration(selection, "    private func pointerIsOverFullScreenControl(").replace("private func", "func", 1)
           + declaration(selection, "    private func updatePointerHover(").replace("private func", "func", 1)
+          + declaration(selection, "    private func clickableGhostRect(").replace("private func", "func", 1)
           + declaration(selection, "    private func fullScreenControlHoverChanged(").replace("private func", "func", 1)
           + declaration(selection, "    private func resetFullScreenControlHover(").replace("private func", "func", 1)
           + declaration(selection, "    private func applyDeferredNotchCaptureControlsHeight(").replace("private func", "func", 1)

@@ -75,6 +75,7 @@ final class UpdateService: ObservableObject {
             }
             return
         }
+        if AppInfo.isPersonalFork { return }
         configureAutomaticChecks()
         if autoCheckEnabled {
             DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
@@ -110,6 +111,12 @@ final class UpdateService: ObservableObject {
                 state = .upToDate
                 availableNotes = nil
             }
+            lastChecked = Date()
+            return
+        }
+        if AppInfo.isPersonalFork {
+            state = .upToDate
+            availableNotes = nil
             lastChecked = Date()
             return
         }
@@ -206,7 +213,7 @@ final class UpdateService: ObservableObject {
     // MARK: - Download & install
 
     func downloadAndInstall() {
-        if AppInfo.isDeveloperBuild { return }  // never replace the local dev build over itself
+        if AppInfo.isDeveloperBuild || AppInfo.isPersonalFork { return }  // never replace a local build with an official one
         guard let downloadURL else { return }
         // Pre-flight BEFORE spending the download: a translocated app or one
         // running from a read-only volume (the mounted DMG) can never be
