@@ -391,6 +391,7 @@ final class StatusItemController {
         // image is only touched when some ingredient actually changed.
         let stateKey = [String(hidden), String(mainItemHidden), String(updateAvailable),
                         String(keepAwakeActive), KeepAwakeIconTint.current.rawValue,
+                        KeepAwakeIconTint.current.nsColor?.description ?? "",
                         KeepAwakeActiveIcon.current.rawValue, BlackHoleGlyph.chosenSymbolName,
                         String(micBadgeActive)].joined(separator: "|")
         guard stateKey != lastIconStateKey else { return }
@@ -1073,16 +1074,7 @@ enum BlackHoleGlyph {
         return tinted
     }
 
-    private static func color(for tint: KeepAwakeIconTint) -> NSColor? {
-        switch tint {
-        case .orange: return .systemOrange
-        case .green: return .systemGreen
-        case .blue: return .systemBlue
-        case .purple: return .systemPurple
-        case .pink: return .systemPink
-        case .none: return nil
-        }
-    }
+    private static func color(for tint: KeepAwakeIconTint) -> NSColor? { tint.nsColor }
 
     /// Keeps a recognizable presence if the bundled asset is ever missing
     /// (e.g. running the bare binary from build/).

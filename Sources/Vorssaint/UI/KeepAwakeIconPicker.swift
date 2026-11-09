@@ -6,6 +6,9 @@ import SwiftUI
 struct KeepAwakeIconPicker: View {
     @ObservedObject private var l10n = L10n.shared
     @AppStorage(DefaultsKey.menuBarIconSymbol) private var menuBarSymbol = ""
+    // Redraw the custom and theme swatches when their colors change.
+    @AppStorage(DefaultsKey.keepAwakeIconCustomColor) private var customColor = ""
+    @AppStorage(DefaultsKey.notchThemeColor) private var themeColor = NotchTheme.defaultColor
     @Binding var iconValue: String
     @Binding var tintValue: String
     var compact = false
@@ -111,9 +114,27 @@ struct KeepAwakeIconPicker: View {
         let selected = tint == selectedTint
         return Button {
             tintValue = tint.rawValue
+            if tint == .custom { KeepAwakeCustomColorPanel.shared.show() }
         } label: {
             ZStack {
-                if let color = tintColor(tint) {
+                if tint == .custom {
+                    // A color wheel until a color is chosen, then that color
+                    // in a rainbow ring. Clicking it opens the color panel.
+                    Circle()
+                        .strokeBorder(AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red],
+                                                      center: .center), lineWidth: 2.2)
+                        .frame(width: compact ? 14 : 16, height: compact ? 14 : 16)
+                    if !customColor.isEmpty, let color = tintColor(tint) {
+                        Circle().fill(color).frame(width: compact ? 8 : 9, height: compact ? 8 : 9)
+                    }
+                } else if tint == .theme, let color = tintColor(tint) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: compact ? 12 : 14, height: compact ? 12 : 14)
+                    Image(systemName: "paintpalette.fill")
+                        .font(.system(size: compact ? 6.5 : 7.5, weight: .bold))
+                        .foregroundStyle(.black.opacity(0.55))
+                } else if let color = tintColor(tint) {
                     Circle()
                         .fill(color)
                         .frame(width: compact ? 12 : 14, height: compact ? 12 : 14)
@@ -148,13 +169,58 @@ struct KeepAwakeIconPicker: View {
     }
 
     private func tintColor(_ tint: KeepAwakeIconTint) -> Color? {
-        switch tint {
-        case .orange: return .orange
-        case .green: return .green
-        case .blue: return .blue
-        case .purple: return .purple
-        case .pink: return .pink
+        tint.nsColor.map { Color(nsColor: $0) }
+    }
+}
+
+extension KeepAwakeIconTint {
+    /// The color the menu bar icon takes; nil draws it as a plain template.
+    var nsColor: NSColor? {
+        switch self {
+        case .orange: return .systemOrange
+        case .green: return .systemGreen
+        case .blue: return .systemBlue
+        case .purple: return .systemPurple
+        case .pink: return .systemPink
+        case .custom:
+            return Self.color(hex: UserDefaults.standard.string(forKey: DefaultsKey.keepAwakeIconCustomColor))
+                ?? .systemOrange
+        case .theme:
+            return Self.color(hex: UserDefaults.standard.string(forKey: DefaultsKey.notchThemeColor))
+                ?? Self.color(hex: NotchTheme.defaultColor)
         case .none: return nil
         }
+    }
+
+    private static func color(hex: String?) -> NSColor? {
+        guard let hex, !hex.isEmpty, let value = ColorValue(text: hex) else { return nil }
+        return NSColor(srgbRed: value.red, green: value.green, blue: value.blue, alpha: 1)
+    }
+}
+
+/// The system color panel for the custom icon color. It writes each change
+/// straight to the preference, so it keeps working after the menu closes.
+@MainActor
+final class KeepAwakeCustomColorPanel: NSObject {
+    static let shared = KeepAwakeCustomColorPanel()
+
+    func show() {
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.color = KeepAwakeIconTint.custom.nsColor ?? .systemOrange
+        panel.setTarget(self)
+        panel.setAction(#selector(colorChanged(_:)))
+        panel.level = .popUpMenu
+        NSApp.activate(ignoringOtherApps: true)
+        panel.orderFrontRegardless()
+    }
+
+    @objc private func colorChanged(_ sender: NSColorPanel) {
+        guard let rgb = sender.color.usingColorSpace(.sRGB) else { return }
+        func byte(_ component: CGFloat) -> Int { Int((min(max(component, 0), 1) * 255).rounded()) }
+        let hex = String(format: "#%02X%02X%02X", byte(rgb.redComponent), byte(rgb.greenComponent),
+                         byte(rgb.blueComponent))
+        UserDefaults.standard.set(hex, forKey: DefaultsKey.keepAwakeIconCustomColor)
+        UserDefaults.standard.set(KeepAwakeIconTint.custom.rawValue, forKey: DefaultsKey.keepAwakeIconTint)
     }
 }

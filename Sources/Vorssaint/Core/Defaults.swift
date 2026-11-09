@@ -44,6 +44,7 @@ enum DefaultsKey {
     static let launchAtLoginWanted = "launchAtLoginWanted"  // the user's choice; the system record can be lost
     static let keepAwakeShortcut = "keepAwakeShortcut"    // GlobalShortcut storage value
     static let keepAwakeIconTint = "keepAwakeIconTint"    // KeepAwakeIconTint.rawValue
+    static let keepAwakeIconCustomColor = "keepAwakeIconCustomColor" // "#RRGGBB" for KeepAwakeIconTint.custom
     static let keepAwakeActiveIcon = "keepAwakeActiveIcon" // KeepAwakeActiveIcon.rawValue
     static let showCountdown = "showCountdownInMenuBar"
     static let statusItemPlacementGeneration = "statusItemPlacementGeneration"
@@ -1083,7 +1084,7 @@ enum SupportUpdateIntroInfo {
 }
 
 enum KeepAwakeIconTint: String, CaseIterable, Identifiable {
-    case orange, green, blue, purple, pink, none
+    case orange, green, blue, purple, pink, custom, theme, none
 
     var id: String { rawValue }
 
@@ -1100,6 +1101,8 @@ enum KeepAwakeIconTint: String, CaseIterable, Identifiable {
         case .blue: return strings.keepAwakeIconTintBlue
         case .purple: return strings.keepAwakeIconTintPurple
         case .pink: return strings.keepAwakeIconTintPink
+        case .custom: return "Custom"
+        case .theme: return "Theme color"
         case .none: return strings.keepAwakeIconTintNone
         }
     }
@@ -1245,6 +1248,7 @@ enum Defaults {
         DefaultsKey.launchAtLoginWanted: false,
         DefaultsKey.keepAwakeShortcut: "control+option+command:40",
         DefaultsKey.keepAwakeIconTint: KeepAwakeIconTint.orange.rawValue,
+        DefaultsKey.keepAwakeIconCustomColor: "",
         DefaultsKey.keepAwakeActiveIcon: KeepAwakeActiveIcon.vorssaint.rawValue,
         DefaultsKey.showCountdown: false,
         DefaultsKey.scrollInverterEnabled: false,
