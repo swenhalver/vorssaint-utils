@@ -1102,6 +1102,18 @@ private final class ScreenshotOverlayView: NSView {
     private var pointerIsInside = false
     private var hoveredWindow: ScreenshotSupport.PickableWindow?
     private let highlightWindows = UserDefaults.standard.bool(forKey: DefaultsKey.screenshotHighlightWindows)
+    /// Parts of the window under the pointer, smallest first, in view
+    /// coordinates; the pointer picks one and the wheel steps between them.
+    private let smartAreasEnabled = UserDefaults.standard.bool(forKey: DefaultsKey.screenshotSmartAreas)
+    private var smartAreas: [CGRect] = []
+    private var smartLevel = 0
+    private var smartWindowID: CGWindowID?
+    /// The person stepped to another level; moving keeps that part while
+    /// the pointer stays on it.
+    private var smartLevelChosen = false
+    private var smartQueryInFlight = false
+    private var smartPendingPoint: CGPoint?
+    private var smartScrollAccumulator: CGFloat = 0
     /// The value just copied with C, shown briefly in the loupe's info bar
     /// because the regular HUD sits under these shielding-level panels.
     private var copiedValue: String?
@@ -1302,6 +1314,97 @@ private final class ScreenshotOverlayView: NSView {
         return rect
     }
 
+    // MARK: Smart areas
+
+    private var hoveredArea: CGRect? {
+        guard !smartAreas.isEmpty, dragOrigin == nil else { return nil }
+        let area = smartAreas[min(smartLevel, smartAreas.count - 1)]
+        if adjustedSelection != nil, area.intersects(selection) { return nil }
+        return area
+    }
+
+    private var smartAreasApply: Bool {
+        guard smartAreasEnabled, let controller else { return false }
+        return controller.acceptsCaptureInput && !controller.isPickingColor
+            && !controller.requiresDraggedRegion && !isCapturePending
+    }
+
+    private func clearSmartAreas() {
+        guard !smartAreas.isEmpty || smartWindowID != nil else { return }
+        smartAreas = []
+        smartWindowID = nil
+        smartLevelChosen = false
+        needsDisplay = true
+    }
+
+    private func requestSmartAreas(at point: CGPoint) {
+        guard smartAreasApply, !isDragging, let panel,
+              !(adjustedSelection?.contains(point) ?? false),
+              let window = ScreenshotSupport.window(at: point, in: windows) else {
+            smartPendingPoint = nil
+            clearSmartAreas()
+            return
+        }
+        if smartQueryInFlight {
+            smartPendingPoint = point
+            return
+        }
+        smartQueryInFlight = true
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let offset = CGPoint(x: panel.screenFrame.minX, y: primaryHeight - panel.screenFrame.maxY)
+        let global = CGPoint(x: point.x + offset.x, y: point.y + offset.y)
+        let windowFrame = window.frame.offsetBy(dx: offset.x, dy: offset.y)
+        let windowID = window.windowID
+        ScreenshotSmartAreas.queue.async { [weak self] in
+            let found = ScreenshotSmartAreas.areas(at: global, windowID: windowID, windowFrame: windowFrame)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.smartQueryInFlight = false
+                let areas = found.map { $0.offsetBy(dx: -offset.x, dy: -offset.y) }
+                if let pending = self.smartPendingPoint {
+                    self.smartPendingPoint = nil
+                    self.requestSmartAreas(at: pending)
+                    // A newer point is on its way; this answer still shows
+                    // meanwhile if it covers where the pointer is now.
+                    guard areas.first?.contains(pending) == true else { return }
+                }
+                self.applySmartAreas(areas, windowID: windowID)
+            }
+        }
+    }
+
+    private func applySmartAreas(_ areas: [CGRect], windowID: CGWindowID) {
+        guard smartAreasApply, !isDragging else { return }
+        let previous = hoveredArea
+        let sameWindow = windowID == smartWindowID
+        smartAreas = areas
+        smartWindowID = windowID
+        if sameWindow, smartLevelChosen, let previous,
+           let kept = areas.firstIndex(where: { ScreenshotSmartAreas.isClose($0, previous) }) {
+            smartLevel = kept
+        } else {
+            smartLevelChosen = false
+            smartLevel = ScreenshotSmartAreas.defaultLevel(areas)
+        }
+        needsDisplay = true
+    }
+
+    /// The wheel steps out to the part around this one, or back in.
+    private func stepSmartArea(by delta: CGFloat) -> Bool {
+        guard smartAreasApply, !smartAreas.isEmpty, !isDragging else { return false }
+        smartScrollAccumulator += delta
+        guard abs(smartScrollAccumulator) >= 6 else { return true }
+        let step = smartScrollAccumulator > 0 ? 1 : -1
+        smartScrollAccumulator = 0
+        let next = min(max(smartLevel + step, 0), smartAreas.count - 1)
+        if next != smartLevel {
+            smartLevel = next
+            smartLevelChosen = true
+            needsDisplay = true
+        }
+        return true
+    }
+
     private func adjustCursor(at point: CGPoint) -> NSCursor? {
         var reshaping = false
         if case .draw = dragAction {} else { reshaping = isDragging }
@@ -1441,6 +1544,7 @@ private final class ScreenshotOverlayView: NSView {
         controller?.currentPointerLocation = nil
         let point = convert(event.locationInWindow, from: nil)
         updatePointerHover(point)
+        requestSmartAreas(at: point)
         refreshFullScreenControlVisibility()
         refreshCursor(at: point)
         needsDisplay = true
@@ -1459,9 +1563,14 @@ private final class ScreenshotOverlayView: NSView {
         refreshPointerState()
         refreshGuideVisibility()
         refreshFullScreenControlVisibility()
+        if let panel, !NSMouseInRect(NSEvent.mouseLocation, panel.screenFrame, false) { clearSmartAreas() }
     }
 
     override func scrollWheel(with event: NSEvent) {
+        if acceptsPointerInput, controller?.loupeEnabled == false {
+            let delta = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * 6
+            if stepSmartArea(by: delta) { return }
+        }
         guard acceptsPointerInput, let controller, controller.loupeEnabled else {
             super.scrollWheel(with: event)
             return
@@ -1587,6 +1696,7 @@ private final class ScreenshotOverlayView: NSView {
         }
         let replaced = replacedSelection
         replacedSelection = nil
+        let clickedSmartArea = hoveredArea
 
         if controller.isPickingColor {
             selection = .zero
@@ -1597,6 +1707,24 @@ private final class ScreenshotOverlayView: NSView {
         let clicked = ScreenshotSupport.isClick(from: origin, to: point)
         // A click's few pixels of travel are not a selection.
         if clicked { selection = .zero }
+        // A drawn area replaces whatever part was highlighted before it.
+        if !clicked { clearSmartAreas() }
+        if clicked, let area = clickedSmartArea, area.contains(point) {
+            // A click takes the highlighted part: as a window when it is the
+            // whole window, otherwise as an area, kept for adjusting if asked.
+            if let windowID = smartWindowID, area == smartAreas.last, controller.acceptsWindowClick,
+               !controller.adjustsSelection {
+                controller.confirmWindow(windowID, frame: area, on: panel)
+            } else if controller.adjustsSelection {
+                clearSmartAreas()
+                beginAdjusting(area)
+                controller.setSelectionInProgress(false)
+                refreshCursor(at: point)
+            } else {
+                controller.confirmRegion(area, on: panel)
+            }
+            return
+        }
         if clicked, let replaced {
             // A click beside an area being adjusted keeps that area.
             beginAdjusting(replaced)
@@ -1744,6 +1872,17 @@ private final class ScreenshotOverlayView: NSView {
                                    transform: nil))
             context.fillPath(using: .evenOdd)
             drawSelectionChrome(context, pixelScale: panel.pixelScale)
+            if !isDragging, let area = hoveredArea { drawWindowHighlight(context, rect: area) }
+        } else if dragOrigin == nil, let area = hoveredArea {
+            context.beginPath()
+            context.addRect(bounds)
+            context.addRect(area)
+            context.fillPath(using: .evenOdd)
+            drawWindowHighlight(context, rect: area)
+            let pixelWidth = Int((area.width * panel.pixelScale).rounded())
+            let pixelHeight = Int((area.height * panel.pixelScale).rounded())
+            let level = smartAreas.count > 1 ? "  ·  scroll ↕ \(min(smartLevel, smartAreas.count - 1) + 1)/\(smartAreas.count)" : ""
+            drawBadge("\(pixelWidth) × \(pixelHeight)\(level)", near: CGPoint(x: area.midX, y: area.maxY + 10))
         } else if dragOrigin == nil, hoveredWindow != nil {
             if let hovered = hoveredWindow {
                 context.beginPath()

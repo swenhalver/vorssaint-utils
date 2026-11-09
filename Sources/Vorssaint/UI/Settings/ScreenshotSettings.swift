@@ -25,6 +25,7 @@ struct ScreenshotCaptureSettings: View {
     @AppStorage(DefaultsKey.screenshotIncludePointer) private var includePointer = false
     @AppStorage(DefaultsKey.screenshotShowLastRegion) private var showLastRegion = true
     @AppStorage(DefaultsKey.screenshotAdjustSelection) private var adjustSelection = false
+    @AppStorage(DefaultsKey.screenshotSmartAreas) private var smartAreas = false
     @AppStorage(DefaultsKey.screenshotHighlightWindows) private var highlightWindows = true
     @AppStorage(DefaultsKey.screenshotLoupeStartsOn) private var loupeStartsOn = false
     @AppStorage(DefaultsKey.screenshotLoupeRememberZoom) private var rememberLoupeZoom = false
@@ -144,6 +145,10 @@ struct ScreenshotCaptureSettings: View {
                 }
                 .pickerStyle(.segmented)
                 Toggle(strings.pointerToggle, isOn: $includePointer)
+                Toggle("Detect areas inside windows", isOn: $smartAreas)
+                Text("Highlights the part of a window under the pointer, like a toolbar, sidebar, button or section of a page. Scroll to pick a bigger or smaller part, then click to take it. Uses Accessibility.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle("Adjust the area before capturing", isOn: $adjustSelection)
                 Text("Opens on the last area. Move it or drag its edges, then press Capture, Record or Return. Double-click inside the area to take it too.")
                     .font(.caption)
