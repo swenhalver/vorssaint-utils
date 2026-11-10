@@ -568,7 +568,9 @@ final class NotchService: ObservableObject {
     var showsCompactActivityPicker: Bool {
         (inside || activityPickerMenuOpen) && !hiddenInFullscreen && !hiddenUntilHover && !expanded && !peeking
             && !dragPlaceholder && notice == nil && captureControls == nil
-            && (islandHidden || compactActivities.count > 1)
+            // Hide is always on hand, unless hovering opens the island:
+            // then only competing activities, or a hidden island, show it.
+            && (islandHidden || compactActivities.count > 1 || !hoverOpeningEnabled)
     }
 
     var compactActivityPickerLayout: NotchActivityPickerLayout {

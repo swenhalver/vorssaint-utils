@@ -34,7 +34,7 @@ def declaration(path, prefix, scope=None):
     body = "".join(lines[start:end + 1])
     if path.endswith("Notch/NotchService.swift"):
         # The picker's Hide is a runtime flag the contracts never set.
-        for flag, plain in [("!islandHidden, ", ""), ("(islandHidden || compactActivities.count > 1)",
+        for flag, plain in [("!islandHidden, ", ""), ("(islandHidden || compactActivities.count > 1 || !hoverOpeningEnabled)",
                             "compactActivities.count > 1"), ("        if islandHidden { return .none }\n", ""),
                             ("islandHidden ? [] : liveCompactActivities", "liveCompactActivities")]:
             body = body.replace(flag, plain)
