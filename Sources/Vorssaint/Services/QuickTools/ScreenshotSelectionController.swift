@@ -512,6 +512,12 @@ final class ScreenshotSelectionController {
                 screenCaptureOptions?.markupRequested = false
                 NSSound.beep()
             }
+        case .text:
+            screenCaptureOptions?.textRequested = true
+            if !confirmFromToolbar() {
+                screenCaptureOptions?.textRequested = false
+                NSSound.beep()
+            }
         }
     }
 

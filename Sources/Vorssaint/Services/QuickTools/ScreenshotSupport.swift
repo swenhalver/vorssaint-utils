@@ -208,7 +208,8 @@ enum CaptureToolbarMode: String, CaseIterable {
             ? [CaptureToolbarMode.captureScreen, .captureWindow, .capturePortion] : []
         let record = available.contains(.recording)
             ? [CaptureToolbarMode.recordScreen, .recordPortion] : []
-        let extras = [CaptureToolbarMode.text, .color].filter { available.contains($0.tool) }
+        // Text is a one-click button beside Markup, not a mode to switch to.
+        let extras = [CaptureToolbarMode.color].filter { available.contains($0.tool) }
         return [capture, record, extras].filter { !$0.isEmpty }
     }
 

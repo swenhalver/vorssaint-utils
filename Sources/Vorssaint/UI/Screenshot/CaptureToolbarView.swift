@@ -42,6 +42,14 @@ struct CaptureToolbarView: View {
             if options.selectedTool.offersOptions {
                 optionsButton
             }
+            if options.mode.offersMarkup, options.availableTools.contains(.text) {
+                // One click: the area, window or screen as copied text. Lit
+                // while a text shortcut opened the toolbar in that mode.
+                iconButton(id: "text", symbol: CaptureToolbarMode.text.systemImageName,
+                           help: title(of: .text), selected: options.mode == .text, tint: .primary) {
+                    options.onToolbarAction?(.text)
+                }
+            }
             if options.mode.offersMarkup, options.availableTools.contains(.screenshot) {
                 iconButton(id: "markup", symbol: "pencil.tip.crop.circle", help: strings.markupButton,
                            selected: false, tint: .primary) {

@@ -93,8 +93,8 @@ enum CaptureToolbarTests {
 
         suite.expect(CaptureToolbarMode.groups(available: ScreenCaptureTool.allCases)
                         == [[.captureScreen, .captureWindow, .capturePortion],
-                            [.recordScreen, .recordPortion], [.text, .color]],
-                     "the toolbar lists capture, then record, then Vorssaint's own tools")
+                            [.recordScreen, .recordPortion], [.color]],
+                     "the toolbar lists capture, then record, then Vorssaint's color picker; text is a button beside Markup")
         suite.expect(CaptureToolbarMode.groups(available: [.recording])
                         == [[.recordScreen, .recordPortion]],
                      "a mode without its tool installed is left off the toolbar")

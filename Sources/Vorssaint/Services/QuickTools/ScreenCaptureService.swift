@@ -11,6 +11,9 @@ enum CaptureToolbarAction {
     /// Take the current area, window or screen as a picture and open it in
     /// the markup editor, whatever mode the toolbar is in.
     case markup
+    /// Take the current area, window or screen and copy its text, the way
+    /// Markup opens it as a picture.
+    case text
     case close
 }
 
@@ -35,6 +38,8 @@ final class ScreenCaptureSelectionOptions: ObservableObject {
     /// Set by the Markup button for the capture it starts, and read once
     /// when that capture is routed.
     var markupRequested = false
+    /// Set by the text button the same way, read once when routed.
+    var textRequested = false
     var onSelectionChange: (() -> Void)?
     var onTargetChange: (() -> Void)?
     var onToolbarAction: ((CaptureToolbarAction) -> Void)?
@@ -303,9 +308,15 @@ final class ScreenCaptureService: ObservableObject {
             self.selection = nil
             self.options = nil
             let markup = options.markupRequested
+            let text = options.textRequested
             options.markupRequested = false
+            options.textRequested = false
             if markup, AppFeature.screenshot.isAvailable {
-                self.routeMarkup(outcome)
+                self.routePicture(outcome) { ScreenshotService.shared.receiveMarkupCapture($0) }
+                return
+            }
+            if text, AppFeature.screenOCR.isAvailable {
+                self.routePicture(outcome) { ScreenTextService.shared.receiveUnifiedCapture($0) }
                 return
             }
             self.route(outcome, selected: options.selectedTool,
@@ -368,10 +379,11 @@ final class ScreenCaptureService: ObservableObject {
     /// screen becomes a picture in the markup editor. Record modes chose an
     /// area rather than pixels, so the picture is taken once the surface has
     /// left the screen, the same way a live screenshot is.
-    private func routeMarkup(_ outcome: ScreenshotSelectionController.Outcome) {
+    private func routePicture(_ outcome: ScreenshotSelectionController.Outcome,
+                              deliver: @escaping (ScreenshotSelectionController.Capture) -> Void) {
         switch outcome {
         case .captured(let capture):
-            ScreenshotService.shared.receiveMarkupCapture(capture)
+            deliver(capture)
         case .region(let region), .scrollingRegion(let region):
             let defaults = UserDefaults.standard
             let includePointer = defaults.bool(forKey: DefaultsKey.screenshotIncludePointer)
@@ -397,7 +409,7 @@ final class ScreenCaptureService: ObservableObject {
                     self?.showFailure(for: .screenshot)
                     return
                 }
-                ScreenshotService.shared.receiveMarkupCapture(capture)
+                deliver(capture)
             }
         case .color, .cancelled:
             break
