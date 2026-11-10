@@ -1168,7 +1168,7 @@ enum ScreenshotFeatureTests {
                                              hideVorssaintWindows: true,
                                              keepsContentWindowsOut: true,
                                              usesGeometry: false)
-                && recorderPolicy == .init(freeze: true, includePointer: false,
+                && recorderPolicy == .init(freeze: false, includePointer: false,
                                            hideVorssaintWindows: false,
                                            keepsContentWindowsOut: true,
                                            usesGeometry: true)

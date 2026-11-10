@@ -786,6 +786,13 @@ final class ScreenshotSelectionController {
         return true
     }
 
+    /// An area drawn, moved or resized is remembered at once, so the next
+    /// session opens on it even when this one is closed without a capture.
+    fileprivate func rememberArea(_ viewRect: CGRect, on panel: ScreenshotOverlayPanel) {
+        guard activeMode != .color, viewRect.width >= 1, viewRect.height >= 1 else { return }
+        Self.lastRegion = (panel.displayID, viewRect)
+    }
+
     /// Drawing a new area on one display drops the one waiting on another.
     fileprivate func endAdjusting(except kept: ScreenshotOverlayPanel) {
         panels.filter { $0 !== kept }.forEach { $0.overlayView.endAdjusting() }
@@ -1459,6 +1466,7 @@ private final class ScreenshotOverlayView: NSView {
         selection = ScreenshotSupport.clamp(rect, to: bounds)
         isAdjusting = true
         ghostRect = nil
+        if let panel { controller?.rememberArea(selection, on: panel) }
         refreshConfirmControl()
         needsDisplay = true
     }
@@ -2049,6 +2057,7 @@ private final class ScreenshotOverlayView: NSView {
         case .move, .resize:
             // Moving or resizing keeps the area waiting for the button.
             dragAction = .draw
+            controller.rememberArea(selection, on: panel)
             refreshConfirmControl()
             refreshCursor(at: point)
             needsDisplay = true

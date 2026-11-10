@@ -589,7 +589,8 @@ enum ScreenshotSelectionRefreshContract {
         let loupeRequest = ScreenshotCaptureEngine.requests.count
         loupe.loadLiveLoupeImages()
         await drain()
-        loupe.select(.recording)
+        // Recording is live too now; text still photographs the screen.
+        loupe.select(.text)
         await drain()
         ScreenshotCaptureEngine.complete(loupeRequest + 1, displays: [1, 2])
         await drain()

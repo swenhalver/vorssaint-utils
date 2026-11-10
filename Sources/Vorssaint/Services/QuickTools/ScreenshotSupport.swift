@@ -250,7 +250,11 @@ enum ScreenshotSupport {
                                      screenshotHideVorssaintWindows: Bool)
         -> UnifiedCapturePolicy {
         UnifiedCapturePolicy(
-            freeze: tool == .screenshot ? screenshotFreeze : true,
+            // Recording follows the screenshot choice, as the system's recorder
+            // never stops the screen: photographing every display first held
+            // the surface back by most of a second. Text and color read the
+            // still image itself, so they always freeze.
+            freeze: tool == .screenshot || tool == .recording ? screenshotFreeze : true,
             includePointer: tool == .screenshot && screenshotIncludePointer,
             hideVorssaintWindows: tool != .recording && screenshotHideVorssaintWindows,
             keepsContentWindowsOut: tool == .recording || screenshotHideVorssaintWindows,
