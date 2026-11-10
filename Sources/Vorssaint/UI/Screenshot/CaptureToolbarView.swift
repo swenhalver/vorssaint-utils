@@ -133,8 +133,14 @@ struct CaptureToolbarView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .frame(height: 36)
-                .background(Color.accentColor.opacity(hovered == "primary" ? 1 : 0.9),
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(
+                    // The system's own blue, solid like the Capture button of
+                    // Command-Shift-5, a touch lighter under the pointer.
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(LinearGradient(colors: [Color(nsColor: .systemBlue).opacity(0.92),
+                                                      Color(nsColor: .systemBlue)],
+                                             startPoint: .top, endPoint: .bottom))
+                        .brightness(hovered == "primary" ? 0.06 : 0))
                 .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
