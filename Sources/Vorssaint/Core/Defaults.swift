@@ -757,6 +757,18 @@ enum DefaultsKey {
     static let recorderSystemAudioTapVerified = "recorderSystemAudioTapVerified"
     static let recorderSaveFolder = "recorderSaveFolder"
     static let recorderOpenEditor = "recorderOpenEditor"
+    /// After a recording stops, a thumbnail waits in the corner the way the
+    /// system recorder's does: a click opens the editor, otherwise it saves.
+    static let recorderFloatingThumbnail = "recorderFloatingThumbnail"
+    /// Recordings saved without the editor mark each click with a ring.
+    static let recorderShowClicks = "recorderShowClicks"
+    /// The capture toolbar's last mode per tool, and where it was dragged to.
+    static let screenCaptureTarget = "screenCaptureTarget"
+    static let recorderCaptureTarget = "recorderCaptureTarget"
+    static let captureToolbarPosition = "captureToolbarPosition"
+    /// Every finished screenshot and recording also goes on the clipboard as
+    /// a file, the way Finder copies one.
+    static let captureCopiesToClipboard = "captureCopiesToClipboard"
     static let recorderAutomaticZoom = "recorderAutomaticZoom"
     static let recorderGIFSize = "recorderGIFSize"
     static let recorderGIFFrameRate = "recorderGIFFrameRate"
@@ -1902,6 +1914,12 @@ enum Defaults {
         DefaultsKey.recorderMicrophone: false,
         DefaultsKey.recorderSaveFolder: "",
         DefaultsKey.recorderOpenEditor: true,
+        DefaultsKey.recorderFloatingThumbnail: true,
+        DefaultsKey.recorderShowClicks: false,
+        DefaultsKey.screenCaptureTarget: ScreenCaptureTarget.portion.rawValue,
+        DefaultsKey.recorderCaptureTarget: ScreenCaptureTarget.portion.rawValue,
+        DefaultsKey.captureToolbarPosition: "",
+        DefaultsKey.captureCopiesToClipboard: true,
         DefaultsKey.recorderAutomaticZoom: true,
         DefaultsKey.recorderGIFSize: RecorderSupport.GIFSize.medium.rawValue,
         DefaultsKey.recorderGIFFrameRate: 12,

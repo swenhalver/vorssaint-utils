@@ -678,6 +678,93 @@ enum RecorderSupport {
         }
     }
 
+    // MARK: - File name
+
+    /// The name a finished recording is saved under, shaped like the one
+    /// macOS gives its own: "Screen Recording 2026-11-09 at 7.51.03 PM.mp4"
+    /// on a 12-hour clock, "… at 19.51.03.mp4" on a 24-hour one. The digits
+    /// stay Western and the periods stay periods whatever the language, so a
+    /// folder of recordings still sorts by date.
+    static func recordingFileName(prefix: String,
+                                  date: Date,
+                                  uses12HourClock: Bool,
+                                  fileExtension: String,
+                                  timeZone: TimeZone = .current) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = uses12HourClock
+            ? "yyyy-MM-dd 'at' h.mm.ss a"
+            : "yyyy-MM-dd 'at' HH.mm.ss"
+        return "\(prefix) \(formatter.string(from: date)).\(fileExtension)"
+    }
+
+    /// Whether this Mac shows time on a 12-hour clock, including the
+    /// "24-hour time" switch in System Settings, which reaches the current
+    /// locale as its hour cycle.
+    static var systemUses12HourClock: Bool {
+        uses12HourClock(Locale.current.hourCycle)
+    }
+
+    static func uses12HourClock(_ cycle: Locale.HourCycle) -> Bool {
+        cycle == .oneToTwelve || cycle == .zeroToEleven
+    }
+
+    // MARK: - Floating thumbnail
+
+    /// How long the thumbnail waits in the corner before the recording is
+    /// saved on its own, the same few seconds macOS gives its own.
+    static let floatingThumbnailDuration: TimeInterval = 5
+
+    /// A two-finger swipe toward the screen edge sends the thumbnail away and
+    /// saves at once. Small sideways drift while aiming a click must not.
+    static let thumbnailSwipeDistance: CGFloat = 36
+
+    static func thumbnailSwipeSaves(accumulatedFingerTravel travel: CGFloat) -> Bool {
+        travel >= thumbnailSwipeDistance
+    }
+
+    /// The thumbnail's size: the recording's own shape, no wider or taller
+    /// than the corner it sits in allows, and never a sliver.
+    static func thumbnailSize(for videoSize: CGSize,
+                              maximum: CGSize = CGSize(width: 220, height: 150)) -> CGSize {
+        guard videoSize.width > 0, videoSize.height > 0 else { return maximum }
+        let scale = min(maximum.width / videoSize.width, maximum.height / videoSize.height)
+        return CGSize(width: max(64, (videoSize.width * scale).rounded()),
+                      height: max(48, (videoSize.height * scale).rounded()))
+    }
+
+    // MARK: - Save folder choices
+
+    struct SaveFolderChoice: Equatable {
+        /// What the preference holds for this folder. The Desktop is the empty
+        /// string, the value the recorder has always treated as its default.
+        let storedValue: String
+        let path: String
+        let isSelected: Bool
+    }
+
+    /// The folders the chooser's options offer, the way the system's own
+    /// recorder lists them: Desktop, Documents and Movies, plus the folder
+    /// picked in Settings when it is somewhere else. A stored path that is one
+    /// of the standard folders selects that folder instead of adding a twin.
+    static func saveFolderChoices(stored: String, home: String) -> [SaveFolderChoice] {
+        let standard = ["Desktop", "Documents", "Movies"].map {
+            (home as NSString).appendingPathComponent($0)
+        }
+        let expanded = stored.isEmpty ? "" : (stored as NSString).expandingTildeInPath
+        let normalized = expanded.isEmpty ? standard[0] : (expanded as NSString).standardizingPath
+        var choices = standard.enumerated().map { index, path in
+            SaveFolderChoice(storedValue: index == 0 ? "" : path,
+                             path: path,
+                             isSelected: normalized == path)
+        }
+        if !standard.contains(normalized) {
+            choices.append(SaveFolderChoice(storedValue: stored, path: normalized, isSelected: true))
+        }
+        return choices
+    }
+
     // MARK: - Finished file
 
     /// Where an export is written before it takes the destination's place.

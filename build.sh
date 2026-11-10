@@ -348,6 +348,7 @@ if (( TEST )); then
         Sources/Vorssaint/Core/RecentCaptureStrings.swift
         Sources/Vorssaint/Core/RecorderStrings.swift
         Sources/Vorssaint/Core/RecorderShareStrings.swift
+        Sources/Vorssaint/Core/CaptureToolbarStrings.swift
         Sources/Vorssaint/Core/CameraPreviewStrings.swift
         Sources/Vorssaint/Core/WallpaperStrings.swift
         Sources/Vorssaint/Services/Wallpaper/WallpaperSupport.swift

@@ -118,6 +118,105 @@ enum ScreenCaptureTool: String, CaseIterable {
     }
 }
 
+/// What a capture takes, as the system's own toolbar offers it: the whole
+/// screen, one window, or a portion drawn by hand.
+enum ScreenCaptureTarget: String, CaseIterable {
+    case screen
+    case window
+    case portion
+
+    /// The last target used with a tool, so the toolbar opens where it was
+    /// left. Text and color always pick from a portion of the screen.
+    static func remembered(for tool: ScreenCaptureTool,
+                           stored: (String) -> String?) -> ScreenCaptureTarget {
+        guard let key = tool.rememberedTargetKey,
+              let target = stored(key).flatMap(ScreenCaptureTarget.init(rawValue:)),
+              tool.offers(target) else { return .portion }
+        return target
+    }
+}
+
+extension ScreenCaptureTool {
+    /// Recording a window is still reached by clicking one in portion mode;
+    /// the toolbar itself offers the two record modes the system offers.
+    func offers(_ target: ScreenCaptureTarget) -> Bool {
+        switch self {
+        case .screenshot: return true
+        case .recording: return target != .window
+        case .text, .color: return target == .portion
+        }
+    }
+
+    /// The color picker has nothing to set; every other tool has an Options
+    /// menu.
+    var offersOptions: Bool { self != .color }
+
+    var rememberedTargetKey: String? {
+        switch self {
+        case .screenshot: return DefaultsKey.screenCaptureTarget
+        case .recording: return DefaultsKey.recorderCaptureTarget
+        case .text, .color: return nil
+        }
+    }
+}
+
+/// One button of the capture toolbar, in the order the system lays them out,
+/// followed by the two tools only Vorssaint has.
+enum CaptureToolbarMode: String, CaseIterable {
+    case captureScreen, captureWindow, capturePortion
+    case recordScreen, recordPortion
+    case text, color
+
+    var tool: ScreenCaptureTool {
+        switch self {
+        case .captureScreen, .captureWindow, .capturePortion: return .screenshot
+        case .recordScreen, .recordPortion: return .recording
+        case .text: return .text
+        case .color: return .color
+        }
+    }
+
+    var target: ScreenCaptureTarget {
+        switch self {
+        case .captureScreen, .recordScreen: return .screen
+        case .captureWindow: return .window
+        case .capturePortion, .recordPortion, .text, .color: return .portion
+        }
+    }
+
+    init(tool: ScreenCaptureTool, target: ScreenCaptureTarget) {
+        self = Self.allCases.first { $0.tool == tool && $0.target == target }
+            ?? Self.allCases.first { $0.tool == tool && $0.target == .portion }!
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .captureScreen: return "rectangle.inset.filled"
+        case .captureWindow: return "macwindow"
+        case .capturePortion: return "rectangle.dashed"
+        case .recordScreen: return "rectangle.inset.filled.badge.record"
+        case .recordPortion: return "rectangle.dashed.badge.record"
+        case .text: return ScreenCaptureTool.text.systemImageName
+        case .color: return ScreenCaptureTool.color.systemImageName
+        }
+    }
+
+    /// The buttons whose tool is installed, grouped as the toolbar shows
+    /// them: capture, record, then Vorssaint's own tools.
+    static func groups(available: [ScreenCaptureTool]) -> [[CaptureToolbarMode]] {
+        let capture = available.contains(.screenshot)
+            ? [CaptureToolbarMode.captureScreen, .captureWindow, .capturePortion] : []
+        let record = available.contains(.recording)
+            ? [CaptureToolbarMode.recordScreen, .recordPortion] : []
+        let extras = [CaptureToolbarMode.text, .color].filter { available.contains($0.tool) }
+        return [capture, record, extras].filter { !$0.isEmpty }
+    }
+
+    /// Markup photographs the area, so it is offered wherever an area,
+    /// window or screen is being chosen, and not while picking a color.
+    var offersMarkup: Bool { tool != .color }
+}
+
 /// Pure logic for the screenshot tool: capture routing, selection geometry,
 /// coordinate conversions between the window server, screens and image
 /// pixels, the annotation model and file naming. No AppKit so the unit test
@@ -169,6 +268,83 @@ enum ScreenshotSupport {
     ) -> Bool {
         isAvailable(selected.feature)
     }
+
+    // MARK: - Capture toolbar placement
+
+    static let captureToolbarMargin: CGFloat = 8
+    static let captureToolbarDefaultBottomInset: CGFloat = 32
+
+    /// Where the toolbar sits on a display, in the overlay's flipped points.
+    /// The stored position is a pair of fractions of the room the display
+    /// leaves around the toolbar, so the same position fits any display and a
+    /// display that shrank or went away can never strand it off screen. An
+    /// empty or unreadable position is the system's spot: centered, near the
+    /// bottom.
+    static func captureToolbarFrame(size: CGSize, bounds: CGRect, stored: String) -> CGRect {
+        let margin = captureToolbarMargin
+        let roomX = max(0, bounds.width - size.width - margin * 2)
+        let roomY = max(0, bounds.height - size.height - margin * 2)
+        let parts = stored.split(separator: " ").compactMap { Double($0) }
+        let fractions: CGPoint
+        if parts.count == 2, parts.allSatisfy({ $0.isFinite }) {
+            fractions = CGPoint(x: min(max(parts[0], 0), 1), y: min(max(parts[1], 0), 1))
+        } else {
+            let bottom = roomY > 0
+                ? max(0, roomY - max(0, captureToolbarDefaultBottomInset - margin)) / roomY
+                : 1
+            fractions = CGPoint(x: 0.5, y: bottom)
+        }
+        return CGRect(x: (bounds.minX + margin + roomX * fractions.x).rounded(),
+                      y: (bounds.minY + margin + roomY * fractions.y).rounded(),
+                      width: size.width,
+                      height: size.height)
+    }
+
+    /// A dragged toolbar, kept whole on the display.
+    static func clampedCaptureToolbarOrigin(_ origin: CGPoint, size: CGSize,
+                                            bounds: CGRect) -> CGPoint {
+        let margin = captureToolbarMargin
+        let maxX = max(bounds.minX + margin, bounds.maxX - size.width - margin)
+        let maxY = max(bounds.minY + margin, bounds.maxY - size.height - margin)
+        return CGPoint(x: min(max(origin.x, bounds.minX + margin), maxX),
+                       y: min(max(origin.y, bounds.minY + margin), maxY))
+    }
+
+    /// The fractions `captureToolbarFrame` reads back.
+    static func captureToolbarStoredPosition(frame: CGRect, bounds: CGRect) -> String {
+        let margin = captureToolbarMargin
+        let roomX = bounds.width - frame.width - margin * 2
+        let roomY = bounds.height - frame.height - margin * 2
+        let x = roomX > 0 ? (frame.minX - bounds.minX - margin) / roomX : 0.5
+        let y = roomY > 0 ? (frame.minY - bounds.minY - margin) / roomY : 1
+        func clamped(_ value: CGFloat) -> String {
+            String(format: "%.4f", locale: Locale(identifier: "en_US_POSIX"),
+                   Double(min(max(value, 0), 1)))
+        }
+        return "\(clamped(x)) \(clamped(y))"
+    }
+
+    // MARK: - Clipboard
+
+    /// Every finished screenshot and recording is saved and also put on the
+    /// clipboard as a file, unless the person turned that off.
+    static func capturesCopyToClipboard(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: DefaultsKey.captureCopiesToClipboard)
+    }
+
+    /// With copying on, whatever the after-capture action was, the capture is
+    /// saved and its file copied; opening the editor still opens it.
+    static func effectiveDefaultAction(_ action: ScreenshotDefaultAction,
+                                       copiesToClipboard: Bool) -> ScreenshotDefaultAction {
+        guard copiesToClipboard else { return action }
+        return action == .edit ? .edit : .saveAndCopy
+    }
+
+    /// The editable area is drawn the way macOS draws its own: a short white
+    /// dash and gap, and eight round handles small enough to stay out of the
+    /// picture yet large enough to grab (the hit boxes are bigger).
+    static let selectionOutlineDash: [CGFloat] = [4, 3]
+    static let selectionHandleRadius: CGFloat = 4.5
 
     static func selectionDimAlpha(notchControls: Bool, isFrozen: Bool, isDragging: Bool) -> CGFloat {
         if notchControls { return isDragging ? 0.18 : 0 }

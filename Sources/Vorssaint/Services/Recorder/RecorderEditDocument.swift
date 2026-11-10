@@ -256,6 +256,19 @@ struct RecorderEditDocument: Codable, Equatable {
         return next
     }
 
+    /// What a recording saved without the editor looks like: the picture as
+    /// it happened, the way the system recorder saves it. The pointer is drawn
+    /// (the capture itself never contains one) without smoothing, nothing is
+    /// zoomed or framed, both sound tracks stay, and clicks get a ring only
+    /// when the person asked for them.
+    static func asRecorded(quality: String?, showsClicks: Bool) -> RecorderEditDocument {
+        var document = RecorderEditDocument(
+            quality: RecorderSupport.sanitizedQuality(quality).rawValue,
+            zoomEnabled: false).applying(.raw)
+        document.showsClickRing = showsClicks
+        return document
+    }
+
     func matches(_ look: Look) -> Bool {
         let expected = applying(look)
         return backdrop == expected.backdrop
