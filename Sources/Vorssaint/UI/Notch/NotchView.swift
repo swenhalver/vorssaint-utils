@@ -172,40 +172,44 @@ struct NotchView: View {
                 NotchIconButton(symbol: "chevron.down", title: text.open) { service.open() }
             }
             .padding(.horizontal, NotchLayout.horizontalInset).padding(.top, service.geometry.safeContentTop)
-        } else if let activity = service.compactActivity {
-            if service.showsCompactActivityPicker {
-                let layout = service.compactActivityPickerLayout
-                VStack(spacing: 0) {
-                    let strip = service.compactStripSize(for: activity, companion: service.compactCompanion)
-                    ZStack(alignment: .top) {
+        } else if service.showsCompactActivityPicker {
+            // Hidden, the picker has only the camera's row above its choices.
+            let layout = service.compactActivityPickerLayout
+            let activity = service.compactActivity
+            VStack(spacing: 0) {
+                ZStack(alignment: .top) {
+                    if let activity {
+                        let strip = service.compactStripSize(for: activity, companion: service.compactCompanion)
                         activityStrip(activity, size: strip)
                             .frame(width: strip.width, height: layout.headerHeight, alignment: .top)
                             .id(NotchPickedStrip(activity: activity, companion: service.compactCompanion))
                             .transition(.blurReplace)
                     }
-                    .frame(height: layout.headerHeight, alignment: .top)
-                    NotchActivityPicker(activities: service.compactActivities, selected: activity,
-                                        combinations: service.compactActivityCombinations,
-                                        combination: service.compactCompanion.map {
-                                            NotchActivityCombination(primary: activity, companion: $0)
-                                        },
-                                        columns: layout.columns, language: l10n.language,
-                                        select: service.selectCompactActivity, combine: service.selectCompactCombination,
-                                        hide: service.hideCompactActivities)
-                        .padding(.horizontal, NotchActivityPickerLayout.horizontalInset)
-                        .padding(.vertical, NotchActivityPickerLayout.verticalInset)
                 }
-            } else {
-                // Hover grows the capsule around its strip, as it grows the
-                // notch around its wings. Drawn at the grown size, a song's
-                // cover and bars jumped out at once while the shape still grew.
-                let strip = service.compactStripSize(for: activity, companion: service.compactCompanion)
-                activityStrip(activity, size: strip)
-                    .modifier(NotchMascotActivityVisit(service: service,
-                                                       track: service.mascotTrack(overActivityStrip: strip),
-                                                       ownStrip: true))
-                    .transition(companionSwap)
+                .frame(height: layout.headerHeight, alignment: .top)
+                NotchActivityPicker(activities: service.liveCompactActivities, selected: activity,
+                                    combinations: service.compactActivityCombinations,
+                                    combination: activity.flatMap { primary in
+                                        service.compactCompanion.map {
+                                            NotchActivityCombination(primary: primary, companion: $0)
+                                        }
+                                    },
+                                    columns: layout.columns, language: l10n.language,
+                                    select: service.selectCompactActivity, combine: service.selectCompactCombination,
+                                    hidden: service.islandHidden, hide: service.toggleIslandHidden)
+                    .padding(.horizontal, NotchActivityPickerLayout.horizontalInset)
+                    .padding(.vertical, NotchActivityPickerLayout.verticalInset)
             }
+        } else if let activity = service.compactActivity {
+            // Hover grows the capsule around its strip, as it grows the
+            // notch around its wings. Drawn at the grown size, a song's
+            // cover and bars jumped out at once while the shape still grew.
+            let strip = service.compactStripSize(for: activity, companion: service.compactCompanion)
+            activityStrip(activity, size: strip)
+                .modifier(NotchMascotActivityVisit(service: service,
+                                                   track: service.mascotTrack(overActivityStrip: strip),
+                                                   ownStrip: true))
+                .transition(companionSwap)
         } else if let departingMusic = service.departingMusic ?? service.lingeringMusic {
             Group {
                 if floats { NotchCapsuleMusicStrip(service: service, snapshot: departingMusic) }
@@ -870,13 +874,14 @@ private struct NotchPickedStrip: Hashable {
 struct NotchActivityPicker: View {
     @Namespace private var choice
     let activities: [NotchCompactActivity]
-    let selected: NotchCompactActivity
+    let selected: NotchCompactActivity?
     let combinations: [NotchActivityCombination]
     let combination: NotchActivityCombination?
     let columns: Int
     let language: AppLanguage
     let select: (NotchCompactActivity) -> Void
     let combine: (NotchActivityCombination) -> Void
+    let hidden: Bool
     let hide: () -> Void
 
     var body: some View {
@@ -930,7 +935,7 @@ struct NotchActivityPicker: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: NotchActivityPickerLayout.spacing),
                                  count: columns), spacing: NotchActivityPickerLayout.spacing) {
             ForEach(activities) { activity in
-                let chosen = activity == selected && combination == nil
+                let chosen = !hidden && activity == selected && combination == nil
                 Button { select(activity) } label: {
                     choiceLabel(symbol: activity.symbol, title: activity.title(language), chosen: chosen)
                 }
@@ -940,10 +945,11 @@ struct NotchActivityPicker: View {
                 .accessibilityIdentifier("notch.activity.\(activity.rawValue)")
             }
             Button(action: hide) {
-                choiceLabel(symbol: "eye.slash", title: FeatureStrings.notch(language).hideActivities, chosen: false)
+                choiceLabel(symbol: "eye.slash", title: FeatureStrings.notch(language).hideActivities, chosen: hidden)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(FeatureStrings.notch(language).hideActivities)
+            .accessibilityAddTraits(hidden ? .isSelected : [])
             .accessibilityIdentifier("notch.activity.hide")
         }
     }

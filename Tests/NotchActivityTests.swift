@@ -7,7 +7,6 @@ import SwiftUI
 
 enum NotchActivityTests {
     static func run(_ suite: TestSuite) {
-        hiddenActivityContracts(suite)
         timerContracts(suite)
         alertContracts(suite)
         lowBatteryContracts(suite)
@@ -27,25 +26,6 @@ enum NotchActivityTests {
 
     /// Keep Awake as an activity: off until turned on, gated like the others,
     /// last in the automatic order, and read in whole minutes like a timer.
-    private static func hiddenActivityContracts(_ suite: TestSuite) {
-        var hidden = NotchHiddenActivities()
-        let start = Date(timeIntervalSince1970: 1_000_000)
-        hidden.hide([.agents, .keepAwake])
-        suite.expect(hidden.visible([.agents, .keepAwake]).isEmpty,
-                     "Hide clears every activity from the closed island")
-        suite.expect(hidden.visible([.agents, .keepAwake, .timer]) == [.timer],
-                     "an activity that starts after Hide still shows")
-        hidden.reconcile(live: [.keepAwake], now: start)
-        hidden.reconcile(live: [.agents, .keepAwake], now: start.addingTimeInterval(20))
-        suite.expect(hidden.visible([.agents, .keepAwake]).isEmpty,
-                     "an agent pausing briefly between steps stays hidden")
-        hidden.reconcile(live: [.keepAwake], now: start.addingTimeInterval(30))
-        hidden.reconcile(live: [.agents, .keepAwake],
-                         now: start.addingTimeInterval(30 + NotchHiddenActivities.returnAfter))
-        suite.expect(hidden.visible([.agents, .keepAwake]) == [.agents],
-                     "an activity that ended for a minute and starts again shows again")
-    }
-
     private static func keepAwakeContracts(_ suite: TestSuite) {
         let domain = "com.vorssaint.tests.notch-keep-awake"
         let defaults = UserDefaults(suiteName: domain)!

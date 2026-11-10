@@ -32,6 +32,12 @@ def declaration(path, prefix, scope=None):
     indent = prefix[:len(prefix) - len(prefix.lstrip())]
     end = next(i for i in range(start + 1, len(lines)) if lines[i].rstrip() == indent + "}")
     body = "".join(lines[start:end + 1])
+    if path.endswith("Notch/NotchService.swift"):
+        # The picker's Hide is a runtime flag the contracts never set.
+        for flag, plain in [("!islandHidden, ", ""), ("(islandHidden || compactActivities.count > 1)",
+                            "compactActivities.count > 1"), ("        if islandHidden { return .none }\n", ""),
+                            ("islandHidden ? [] : liveCompactActivities", "liveCompactActivities")]:
+            body = body.replace(flag, plain)
     return f'#sourceLocation(file: {json.dumps(path)}, line: {start + 1})\n{body}\n#sourceLocation()\n'
 
 
@@ -1455,12 +1461,10 @@ def main():
           + declaration(notch, "    func toggleMusicStripSong(")
               .replace("    func toggleMusicStripSong", "    @discardableResult\n    func toggleMusicStripSong", 1)
           + "}\n}\n")
-    music_visibility = "var hiddenActivities = NotchHiddenActivities()\n" + "".join(
-        declaration(notch, prefix).replace("    private ", "    ", 1) for prefix in [
+    music_visibility = "".join(declaration(notch, prefix).replace("    private ", "    ", 1) for prefix in [
         "    private var hiddenUntilHover:", "    var fullscreenCompact:", "    var idleContent:", "    var hasMusicActivity:",
         "    private func musicStripHolds(", "    var compactActivity:",
-        "    var compactActivityGeometry:", "    private func compactGeometry(", "    var compactActivities:",
-        "    private var liveCompactActivities:",
+        "    var compactActivityGeometry:", "    private func compactGeometry(", "    var compactActivities:", "    var liveCompactActivities:",
         "    var compactCompanion:",
         "    var surfaceSize:", "    var surfaceShift:", "    func collapse(",
         "    private func detachCaptureIfClosingOnCollapse(", "    func endCaptureControls(",
@@ -1586,7 +1590,6 @@ def main():
           + declaration(notch, "    private func switchCompactSelection(").replace("private func", "func", 1)
           + declaration(notch, "    func refreshPresentation(")
               .replace("NotchSupport.coversMenus()", "UserDefaults.standard.coversMenus")
-              .replace("        hiddenActivities.reconcile(live: liveCompactActivities)\n", "")
           + declaration(notch, "    private func applyMenuSpace(").replace("private func", "func", 1)
           + declaration(notch, "    func presentCapture(")
               .replace("content: AnyView, actions: AnyView? = nil", "content: Bool, actions: Bool? = nil")

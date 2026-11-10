@@ -208,7 +208,8 @@ final class NotchService: ObservableObject {
     private var inside = false
     private var hoverEmphasized = false
     private var activitySelection = NotchActivitySelection()
-    private var hiddenActivities = NotchHiddenActivities()
+    /// Set by the picker's Hide. See `toggleIslandHidden()`.
+    private(set) var islandHidden = false
     private var activityPickerMenuOpen = false
     private var hoverState = NotchHoverState()
     private var openedByHover = false
@@ -477,6 +478,7 @@ final class NotchService: ObservableObject {
     /// A Mac without a battery has no charge to show, so a saved battery
     /// choice rests empty there; playing music still shows as before.
     var idleContent: NotchIdleContent {
+        if islandHidden { return .none }
         let content = NotchSupport.visibleIdleContent(isPlaying: !awaitsTrackNotice && NotchMusicService.shared.playback?.isPlaying == true)
         return content == .battery && !PowerSampler.hasInternalBattery ? .none : content
     }
@@ -553,11 +555,11 @@ final class NotchService: ObservableObject {
     }
 
     var compactActivities: [NotchCompactActivity] {
-        hiddenActivities.visible(liveCompactActivities)
+        islandHidden ? [] : liveCompactActivities
     }
 
-    /// Every live activity, hidden or not.
-    private var liveCompactActivities: [NotchCompactActivity] {
+    /// Every live activity, shown or hidden: the picker's choices.
+    var liveCompactActivities: [NotchCompactActivity] {
         NotchSupport.compactActivities(timer: hasTimerActivity, watch: hasWatchActivity, downloads: hasDownloadActivity,
                                       agents: hasAgentActivity, calendar: hasCalendarActivity,
                                       music: hasMusicActivity, keepAwake: hasKeepAwakeActivity)
@@ -566,17 +568,18 @@ final class NotchService: ObservableObject {
     var showsCompactActivityPicker: Bool {
         (inside || activityPickerMenuOpen) && !hiddenInFullscreen && !hiddenUntilHover && !expanded && !peeking
             && !dragPlaceholder && notice == nil && captureControls == nil
-            && compactActivities.count > 1
+            && (islandHidden || compactActivities.count > 1)
     }
 
     var compactActivityPickerLayout: NotchActivityPickerLayout {
-        let activities = compactActivities
+        let activities = liveCompactActivities
         let font = NSFont.systemFont(ofSize: 12, weight: .medium)
         let language = L10n.shared.language
         let labelWidth = (activities.map { $0.title(language) } + [FeatureStrings.notch(language).hideActivities])
             .map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
         let combinations = compactActivityCombinations
-        let sizes = activities.map { compactStripSize(for: $0) }
+        // Hidden, the picker has no strip above its choices.
+        let sizes = (islandHidden ? [] : activities).map { compactStripSize(for: $0) }
             + combinations.map { compactStripSize(for: $0.primary, companion: $0.companion) }
         // Switching the chosen strip must not move the buttons under the pointer.
         let strip = CGSize(width: sizes.map(\.width).max() ?? geometry.cameraWidth,
@@ -588,9 +591,10 @@ final class NotchService: ObservableObject {
     }
 
     func selectCompactActivity(_ activity: NotchCompactActivity) {
-        guard compactActivities.contains(activity) else { return }
+        guard liveCompactActivities.contains(activity) else { return }
         hoverWork?.cancel(); hoverWork = nil
         switchCompactSelection {
+            islandHidden = false
             activitySelection.select(activity, available: compactActivities)
         }
     }
@@ -611,12 +615,18 @@ final class NotchService: ObservableObject {
         refreshPresentation()
     }
 
-    /// The picker's Hide: the closed island stops showing every activity
-    /// it offers, which keep running. See `NotchHiddenActivities`.
-    func hideCompactActivities() {
+    /// The picker's Hide: the closed island shows nothing, no activity,
+    /// resting content or notice, while everything keeps running. Hovering
+    /// the notch still brings the picker, where Hide again or any activity
+    /// shows the island again.
+    func toggleIslandHidden() {
         hoverWork?.cancel(); hoverWork = nil
-        hiddenActivities.hide(compactActivities)
-        activityPickerMenuOpen = false
+        switchCompactSelection { islandHidden.toggle() }
+        if islandHidden {
+            noticeWork?.cancel(); noticeWork = nil
+            notice = nil
+            noticeExpanded = false
+        }
         presentedMusic = nil
         refreshPresentation()
     }
@@ -1373,7 +1383,6 @@ final class NotchService: ObservableObject {
         endMusicStripRequest()
         hoverEmphasized = false
         activitySelection = NotchActivitySelection()
-        hiddenActivities = NotchHiddenActivities()
         activityPickerMenuOpen = false
         hoverState = NotchHoverState()
         openedByHover = false
@@ -2344,7 +2353,7 @@ final class NotchService: ObservableObject {
 
     @discardableResult
     func show(_ incoming: NotchNotice) -> Bool {
-        guard showsSystemFeedback, NotchSupport.routes(incoming.event),
+        guard showsSystemFeedback, !islandHidden, NotchSupport.routes(incoming.event),
               NotchSupport.shouldReplace(notice?.event, with: incoming.event, held: noticeExpanded) else { return false }
         noticeWork?.cancel(); noticeWork = nil
         var incoming = incoming
@@ -2672,7 +2681,6 @@ final class NotchService: ObservableObject {
         defer { if releasedMusicStrip { syncMenuSpaceMonitoring() } }
         syncMascotKeepAwake()
         syncMascotAgents()
-        hiddenActivities.reconcile(live: liveCompactActivities)
         activitySelection.reconcile(available: compactActivities)
         if fullscreenCompact {
             finishMusicDeparture()

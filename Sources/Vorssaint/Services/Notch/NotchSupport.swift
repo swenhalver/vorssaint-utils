@@ -941,37 +941,6 @@ struct NotchActivitySelection {
     }
 }
 
-/// Live activities hidden from the closed island with the picker's Hide.
-/// They stay hidden while they run; one that ends and starts again a minute
-/// or more later is a new activity and shows. A brief gap, such as an agent
-/// between two steps, does not bring it back.
-struct NotchHiddenActivities {
-    static let returnAfter: TimeInterval = 60
-    private(set) var hidden: Set<NotchCompactActivity> = []
-    private var endedAt: [NotchCompactActivity: Date] = [:]
-
-    mutating func hide(_ activities: [NotchCompactActivity]) {
-        hidden.formUnion(activities)
-        for activity in activities { endedAt[activity] = nil }
-    }
-
-    mutating func reconcile(live: [NotchCompactActivity], now: Date = Date()) {
-        for activity in hidden {
-            if live.contains(activity) {
-                if let ended = endedAt.removeValue(forKey: activity), now.timeIntervalSince(ended) >= Self.returnAfter {
-                    hidden.remove(activity)
-                }
-            } else if endedAt[activity] == nil {
-                endedAt[activity] = now
-            }
-        }
-    }
-
-    func visible(_ live: [NotchCompactActivity]) -> [NotchCompactActivity] {
-        hidden.isEmpty ? live : live.filter { !hidden.contains($0) }
-    }
-}
-
 /// A floating capsule has no camera inside it, so its closed content runs in
 /// one row from end to end, and the capsule is as wide as that row needs:
 /// never shorter than the bare capsule, never wider than its kind allows or
