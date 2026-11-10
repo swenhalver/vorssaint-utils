@@ -3,6 +3,7 @@
 
 import AppKit
 import Carbon.HIToolbox
+import Combine
 import SwiftUI
 
 /// The capture surface: one borderless panel per screen, above everything,
@@ -63,6 +64,18 @@ final class ScreenshotSelectionController {
     /// The area stays on screen after it is drawn, to be moved or resized,
     /// and the session opens with the last one; a button takes the shot.
     fileprivate let adjustsSelection: Bool
+    /// A drawn area stays on screen, with its handles, until it is taken.
+    /// The system-style toolbar always works this way, as macOS's does: its
+    /// Capture or Record button takes the area. Without the toolbar it
+    /// follows the setting.
+    fileprivate var keepsDrawnArea: Bool { adjustsSelection || showsToolbar }
+    /// Whether portion mode reopens on the last area. The toolbar's Options
+    /// can change this mid-session, so with the toolbar it is read live.
+    private var remembersLastArea: Bool {
+        showsToolbar
+            ? UserDefaults.standard.bool(forKey: DefaultsKey.screenshotAdjustSelection)
+            : adjustsSelection
+    }
     private var hideVorssaintWindows: Bool
     private let otherProtectedWindowIDs: () -> Set<CGWindowID>
     private let baseMode: Mode
@@ -230,6 +243,18 @@ final class ScreenshotSelectionController {
 
     private var activeTool: ScreenCaptureTool? { screenCaptureOptions?.selectedTool }
 
+    /// Screen, window or portion, as picked on the toolbar. A surface without
+    /// the toolbar always picks a portion, which also takes a clicked window.
+    fileprivate var captureTarget: ScreenCaptureTarget {
+        screenCaptureOptions?.target ?? .portion
+    }
+
+    /// The system-style toolbar replaces the hint bar wherever the controls
+    /// are not in Dynamic Island.
+    fileprivate var showsToolbar: Bool {
+        screenCaptureOptions.map { !$0.controlsInNotch } ?? false
+    }
+
     private var activeMode: Mode {
         switch activeTool {
         case .recording: return .geometry
@@ -245,6 +270,21 @@ final class ScreenshotSelectionController {
         self.completion = completion
         screenCaptureOptions?.onSelectionChange = { [weak self] in
             self?.screenCaptureToolDidChange()
+        }
+        screenCaptureOptions?.onTargetChange = { [weak self] in
+            self?.screenCaptureTargetDidChange()
+        }
+        screenCaptureOptions?.onToolbarAction = { [weak self] action in
+            self?.performToolbarAction(action)
+        }
+        screenCaptureOptions?.onToolbarDrag = { [weak self] translation in
+            // The toolbar being dragged keeps the gesture even when the
+            // pointer crosses onto a display that shows its own.
+            guard let self else { return }
+            let panel = self.panels.first { $0.overlayView.isDraggingToolbar }
+                ?? self.panelUnderMouse().flatMap { $0.overlayView.showsToolbarNow ? $0 : nil }
+                ?? self.panels.first { $0.overlayView.showsToolbarNow }
+            panel?.overlayView.dragToolbar(by: translation)
         }
         if freeze {
             Task { @MainActor [weak self] in
@@ -286,11 +326,15 @@ final class ScreenshotSelectionController {
                                                purpose: purpose,
                                                screenCaptureOptions: screenCaptureOptions)
             if let last = Self.lastRegion, last.displayID == displayID {
-                if adjustsSelection, activeMode != .color,
+                if remembersLastArea, activeMode != .color, captureTarget == .portion,
                    CGRect(origin: .zero, size: screen.frame.size).contains(last.viewRect) {
                     panel.overlayView.beginAdjusting(last.viewRect)
                 } else if showLastRegion {
-                    panel.overlayView.ghostRect = last.viewRect
+                    if captureTarget == .portion {
+                        panel.overlayView.ghostRect = last.viewRect
+                    } else {
+                        panel.overlayView.stashedGhostRect = last.viewRect
+                    }
                 }
             }
             // Populate the retained backing store before a full-screen
@@ -436,6 +480,79 @@ final class ScreenshotSelectionController {
         }
     }
 
+    // MARK: - Toolbar
+
+    /// Screen and window modes take a click, not a drawn area, so the area
+    /// waiting to be adjusted steps aside; coming back to portion mode brings
+    /// the last one back, the way the system's toolbar does.
+    private func screenCaptureTargetDidChange() {
+        if captureTarget != .portion { scrollingCaptureEnabled = false }
+        panels.forEach { $0.overlayView.captureTargetDidChange() }
+        if selectionInProgress { setSelectionInProgress(false) }
+    }
+
+    /// The last area on this display, offered again when portion mode opens.
+    fileprivate func restorableRegion(on panel: ScreenshotOverlayPanel) -> CGRect? {
+        guard remembersLastArea, captureTarget == .portion, !isPickingColor,
+              let last = Self.lastRegion, last.displayID == panel.displayID,
+              CGRect(origin: .zero, size: panel.screenFrame.size).contains(last.viewRect)
+        else { return nil }
+        return last.viewRect
+    }
+
+    private func performToolbarAction(_ action: CaptureToolbarAction) {
+        switch action {
+        case .close:
+            finish(.cancelled)
+        case .confirm:
+            if !confirmFromToolbar() { NSSound.beep() }
+        case .markup:
+            screenCaptureOptions?.markupRequested = true
+            if !confirmFromToolbar() {
+                screenCaptureOptions?.markupRequested = false
+                NSSound.beep()
+            }
+        }
+    }
+
+    /// The toolbar's big button, and Markup: the area being adjusted, the
+    /// screen the toolbar is on, or the window last pointed at.
+    private func confirmFromToolbar() -> Bool {
+        guard acceptsCaptureInput, !isPickingColor,
+              !panels.contains(where: { $0.overlayView.isDragging }) else { return false }
+        switch captureTarget {
+        case .portion:
+            return confirmAdjustedSelection()
+        case .screen:
+            captureFullDisplayUnderMouse()
+            // A live capture finishes a moment later, once the panels are
+            // gone; marking the capture pending is what proves it started.
+            return finished || panels.allSatisfy { $0.overlayView.isCapturePending }
+        case .window:
+            // Only the display the toolbar is on: a window last shown on
+            // another display is not what the person is pointing at now.
+            guard let panel = panelUnderMouse(), let pick = panel.overlayView.lastWindowPick
+            else { return false }
+            if let windowID = pick.windowID {
+                confirmWindow(windowID, frame: pick.frame, on: panel)
+            } else {
+                confirmRegion(pick.frame, on: panel)
+            }
+            return true
+        }
+    }
+
+    /// Return in window mode takes what the pointer shows, never the display.
+    private func confirmWindowFromKeyboard() {
+        if !confirmFromToolbar() { NSSound.beep() }
+    }
+
+    /// A click in screen mode takes the display it landed on.
+    fileprivate func confirmScreen(on panel: ScreenshotOverlayPanel) {
+        guard acceptsCaptureInput, activeMode != .color else { return }
+        captureFullDisplay(on: panel)
+    }
+
     // MARK: - Keyboard
 
     private func installKeyMonitor() {
@@ -459,8 +576,18 @@ final class ScreenshotSelectionController {
             }
             switch Int(event.keyCode) {
             case kVK_Escape:
-                self.finish(.cancelled)
+                // An open Options menu closes first, as a menu does.
+                if self.screenCaptureOptions?.showsOptions == true {
+                    self.screenCaptureOptions?.showsOptions = false
+                } else {
+                    self.finish(.cancelled)
+                }
             case kVK_Return, kVK_ANSI_KeypadEnter:
+                // Window mode takes the window the pointer last showed.
+                if self.captureTarget == .window {
+                    self.confirmWindowFromKeyboard()
+                    break
+                }
                 self.confirmSelectionWithKeyboard()
             case kVK_Space:
                 if let panel = self.panelUnderMouse(), panel.overlayView.isDragging {
@@ -897,6 +1024,9 @@ final class ScreenshotSelectionController {
         Self.isSessionOnScreen = false
         if Self.activeSession === self { Self.activeSession = nil }
         screenCaptureOptions?.onSelectionChange = nil
+        screenCaptureOptions?.onTargetChange = nil
+        screenCaptureOptions?.onToolbarAction = nil
+        screenCaptureOptions?.onToolbarDrag = nil
         if let keyMonitor {
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
@@ -950,6 +1080,43 @@ private enum BackgroundCursor {
         guard connection != 0, let setProperty else { return }
         _ = setProperty(connection, connection, "SetsCursorInBackground" as CFString,
                         allowed ? kCFBooleanTrue : kCFBooleanFalse)
+    }
+}
+
+/// The pointers screen mode shows, as the system's toolbar does: a camera
+/// over a display a click would photograph, a video camera over one it
+/// would record. White with a dark rim, so they read on any picture.
+private enum CaptureModeCursor {
+    static let camera = make("camera.fill")
+    static let record = make("video.fill")
+
+    private static func make(_ symbol: String) -> NSCursor {
+        let size = CGSize(width: 30, height: 30)
+        let configuration = NSImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+        guard let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration) else { return .crosshair }
+        let image = NSImage(size: size, flipped: false) { rect in
+            let glyphSize = glyph.size
+            let target = CGRect(x: rect.midX - glyphSize.width / 2,
+                                y: rect.midY - glyphSize.height / 2,
+                                width: glyphSize.width, height: glyphSize.height)
+            func tinted(_ color: NSColor) -> NSImage {
+                let copy = NSImage(size: glyphSize, flipped: false) { bounds in
+                    glyph.draw(in: bounds)
+                    color.set()
+                    bounds.fill(using: .sourceAtop)
+                    return true
+                }
+                return copy
+            }
+            let rim = tinted(.black.withAlphaComponent(0.75))
+            for (dx, dy) in [(-1.0, 0.0), (1, 0), (0, -1), (0, 1)] {
+                rim.draw(in: target.offsetBy(dx: dx, dy: dy))
+            }
+            tinted(.white).draw(in: target)
+            return true
+        }
+        return NSCursor(image: image, hotSpot: CGPoint(x: size.width / 2, y: size.height / 2))
     }
 }
 
@@ -1101,7 +1268,34 @@ private final class ScreenshotOverlayView: NSView {
     private var hoverPoint: CGPoint = .zero
     private var pointerIsInside = false
     private var hoveredWindow: ScreenshotSupport.PickableWindow?
-    private let highlightWindows = UserDefaults.standard.bool(forKey: DefaultsKey.screenshotHighlightWindows)
+    private let highlightWindowsPreference = UserDefaults.standard.bool(forKey: DefaultsKey.screenshotHighlightWindows)
+    /// Window mode always outlines the window it would take; screen mode
+    /// takes the whole display, so no window is singled out there.
+    private var highlightWindows: Bool {
+        switch controller?.captureTarget ?? .portion {
+        case .window: return true
+        case .screen: return false
+        case .portion: return highlightWindowsPreference
+        }
+    }
+    /// The system-style toolbar and its Options menu, when this surface has
+    /// them; nil where the controls live in Dynamic Island or nowhere.
+    private var toolbarHost: PassThroughHostingView<CaptureToolbarView>?
+    private var optionsHost: PassThroughHostingView<CaptureOptionsCard>?
+    private var toolbarDragStart: CGPoint?
+    private var optionsObservation: AnyCancellable?
+    /// A press in screen or window mode, taken on release like a click.
+    private var pendingTargetClick: CGPoint?
+    /// What the pointer last showed in window mode, which the toolbar's
+    /// button and Return take: a window, or a smaller part of one (no id)
+    /// the wheel stepped in to.
+    private(set) var lastWindowPick: (windowID: CGWindowID?, frame: CGRect)?
+    private var settingsObservation: AnyCancellable?
+    /// The last area outline, set aside while screen or window mode is on.
+    var stashedGhostRect: CGRect?
+
+    var showsToolbarNow: Bool { toolbarHost.map { !$0.isHidden } ?? false }
+    var isDraggingToolbar: Bool { toolbarDragStart != nil }
     /// Parts of the window under the pointer, smallest first, in view
     /// coordinates; the pointer picks one and the wheel steps between them.
     private let smartAreasEnabled = UserDefaults.standard.bool(forKey: DefaultsKey.screenshotSmartAreas)
@@ -1222,6 +1416,12 @@ private final class ScreenshotOverlayView: NSView {
                       let rect = panel.overlayView.adjustedSelection else { return }
                 controller.confirmRegion(rect, on: panel)
             }))
+        if controller.showsToolbar, let screenCaptureOptions {
+            toolbarHost = PassThroughHostingView(interactiveRootView: CaptureToolbarView(
+                options: screenCaptureOptions))
+            optionsHost = PassThroughHostingView(interactiveRootView: CaptureOptionsCard(
+                options: screenCaptureOptions))
+        }
         super.init(frame: frame)
         hoverRelay.changed = { [weak self] in self?.fullScreenControlHoverChanged($0) }
         let tracking = NSTrackingArea(rect: .zero,
@@ -1232,6 +1432,22 @@ private final class ScreenshotOverlayView: NSView {
         addSubview(guideHost)
         addSubview(fullScreenHost)
         addSubview(confirmHost)
+        if let toolbarHost, let optionsHost {
+            addSubview(toolbarHost)
+            addSubview(optionsHost)
+            optionsObservation = screenCaptureOptions?.$showsOptions
+                .receive(on: RunLoop.main)
+                .sink { [weak self] _ in
+                    self?.refreshGuideVisibility()
+                    self?.needsLayout = true
+                }
+            // A choice in the Options menu can add or remove a row, so the
+            // card is measured again whenever a preference changes.
+            settingsObservation = NotificationCenter.default
+                .publisher(for: UserDefaults.didChangeNotification)
+                .receive(on: RunLoop.main)
+                .sink { [weak self] _ in self?.needsLayout = true }
+        }
         refreshGuideVisibility()
         refreshFullScreenControlVisibility()
         refreshConfirmControl()
@@ -1255,8 +1471,93 @@ private final class ScreenshotOverlayView: NSView {
         needsDisplay = true
     }
 
+    /// The toolbar switched between screen, window and portion.
+    func captureTargetDidChange() {
+        dragOrigin = nil
+        pendingTargetClick = nil
+        clearSmartAreas()
+        hoveredWindow = nil
+        lastWindowPick = nil
+        let target = controller?.captureTarget ?? .portion
+        if target == .portion {
+            if ghostRect == nil, let stashed = stashedGhostRect {
+                ghostRect = stashed
+                stashedGhostRect = nil
+            }
+            if !isAdjusting, let panel, let rect = controller?.restorableRegion(on: panel) {
+                beginAdjusting(rect)
+            }
+        } else {
+            if let ghostRect {
+                stashedGhostRect = ghostRect
+                self.ghostRect = nil
+            }
+            isAdjusting = false
+            selection = .zero
+            refreshConfirmControl()
+        }
+        refreshPointerState()
+        needsLayout = true
+        needsDisplay = true
+    }
+
+    private func pointerIsOverToolbar(_ point: CGPoint) -> Bool {
+        (toolbarHost.map { !$0.isHidden && $0.frame.contains(point) } ?? false)
+            || (optionsHost.map { !$0.isHidden && $0.frame.contains(point) } ?? false)
+    }
+
+    /// Window mode remembers what it shows: the part the wheel picked, or
+    /// the window under the pointer.
+    private func refreshWindowPick() {
+        guard controller?.captureTarget == .window else { return }
+        if let area = hoveredArea, area.contains(hoverPoint) {
+            lastWindowPick = (area == smartAreas.last ? smartWindowID : nil, area)
+        } else if let window = hoveredWindow {
+            lastWindowPick = (window.windowID, window.frame)
+        }
+    }
+
+    /// Follows a drag of the toolbar, kept whole on this display, and stores
+    /// where it was let go so the next session opens it there.
+    func dragToolbar(by translation: CGSize?) {
+        guard let toolbarHost else { return }
+        guard let translation else {
+            if toolbarDragStart != nil {
+                toolbarDragStart = nil
+                UserDefaults.standard.set(
+                    ScreenshotSupport.captureToolbarStoredPosition(frame: toolbarHost.frame, bounds: bounds),
+                    forKey: DefaultsKey.captureToolbarPosition)
+                needsLayout = true
+            }
+            return
+        }
+        if toolbarDragStart == nil { toolbarDragStart = toolbarHost.frame.origin }
+        guard let start = toolbarDragStart else { return }
+        toolbarHost.setFrameOrigin(ScreenshotSupport.clampedCaptureToolbarOrigin(
+            CGPoint(x: start.x + translation.width, y: start.y + translation.height),
+            size: toolbarHost.frame.size, bounds: bounds))
+        layoutOptionsCard()
+    }
+
+    private func layoutOptionsCard() {
+        guard let toolbarHost, let optionsHost else { return }
+        let size = optionsHost.fittingSize
+        let toolbar = toolbarHost.frame
+        let margin = ScreenshotSupport.captureToolbarMargin
+        var x = toolbar.maxX - size.width - 70
+        x = min(max(x, bounds.minX + margin), bounds.maxX - size.width - margin)
+        var y = toolbar.minY - size.height - 8
+        if y < bounds.minY + margin { y = toolbar.maxY + 8 }
+        optionsHost.frame = CGRect(x: x.rounded(), y: y.rounded(),
+                                   width: size.width, height: size.height)
+    }
+
     func refreshConfirmControl() {
-        let shown = adjustedSelection != nil && !isCapturePending && controller?.acceptsCaptureInput == true
+        // With the system-style toolbar, its own Capture or Record button
+        // takes the area, as on macOS; the button under the area is for the
+        // surfaces without it.
+        let shown = toolbarHost == nil && adjustedSelection != nil && !isCapturePending
+            && controller?.acceptsCaptureInput == true
         confirmHost.isHidden = !shown
         guard shown else { return }
         let recording = controller?.confirmsByRecording ?? false
@@ -1319,7 +1620,10 @@ private final class ScreenshotOverlayView: NSView {
     private var hoveredArea: CGRect? {
         guard !smartAreas.isEmpty, dragOrigin == nil else { return nil }
         let area = smartAreas[min(smartLevel, smartAreas.count - 1)]
-        if adjustedSelection != nil, area.intersects(selection) { return nil }
+        // The area waiting to be adjusted keeps the pointer while it is on
+        // it; anywhere else the part under the pointer is offered, even where
+        // it overlaps that area.
+        if let adjusted = adjustedSelection, adjusted.contains(hoverPoint) { return nil }
         return area
     }
 
@@ -1327,6 +1631,7 @@ private final class ScreenshotOverlayView: NSView {
         guard smartAreasEnabled, let controller else { return false }
         return controller.acceptsCaptureInput && !controller.isPickingColor
             && !controller.requiresDraggedRegion && !isCapturePending
+            && controller.captureTarget != .screen
     }
 
     private func clearSmartAreas() {
@@ -1384,8 +1689,12 @@ private final class ScreenshotOverlayView: NSView {
             smartLevel = kept
         } else {
             smartLevelChosen = false
-            smartLevel = ScreenshotSmartAreas.defaultLevel(areas)
+            // Window mode starts on the whole window and scrolls inward.
+            smartLevel = controller?.captureTarget == .window
+                ? max(0, areas.count - 1)
+                : ScreenshotSmartAreas.defaultLevel(areas)
         }
+        refreshWindowPick()
         needsDisplay = true
     }
 
@@ -1400,6 +1709,7 @@ private final class ScreenshotOverlayView: NSView {
         if next != smartLevel {
             smartLevel = next
             smartLevelChosen = true
+            refreshWindowPick()
             needsDisplay = true
         }
         return true
@@ -1434,12 +1744,30 @@ private final class ScreenshotOverlayView: NSView {
         let overControl = pointerIsOverFullScreenControl(point)
             || (!guideHost.isHidden && !guideHost.passesThrough && guideHost.frame.contains(point))
             || (!confirmHost.isHidden && confirmHost.frame.contains(point))
-        if overControl { NSCursor.arrow.set(); return }
+        if overControl || pointerIsOverToolbar(point) { NSCursor.arrow.set(); return }
+        if controller?.captureTarget == .screen {
+            (controller?.confirmsByRecording == true
+                ? CaptureModeCursor.record : CaptureModeCursor.camera).set()
+            return
+        }
         (adjustCursor(at: point) ?? NSCursor.crosshair).set()
     }
 
     override func layout() {
         super.layout()
+        if let toolbarHost {
+            if toolbarDragStart == nil {
+                let size = toolbarHost.fittingSize
+                toolbarHost.frame = ScreenshotSupport.captureToolbarFrame(
+                    size: CGSize(width: max(size.width, 1), height: max(size.height, 1)),
+                    bounds: bounds,
+                    stored: UserDefaults.standard.string(forKey: DefaultsKey.captureToolbarPosition) ?? "")
+            }
+            layoutOptionsCard()
+            // The toolbar has its own Capture Entire Screen mode.
+            fullScreenHost.frame = .zero
+            return
+        }
         let width = min(screenCaptureOptions == nil ? 680 : 620,
                         max(280, bounds.width - 32))
         let height: CGFloat = screenCaptureOptions != nil
@@ -1543,8 +1871,15 @@ private final class ScreenshotOverlayView: NSView {
         pointerHasMoved = true
         controller?.currentPointerLocation = nil
         let point = convert(event.locationInWindow, from: nil)
+        if pointerIsOverToolbar(point) {
+            // On the way to the toolbar's button the pointer crosses other
+            // windows; what it showed before reaching the toolbar stays.
+            refreshCursor(at: point)
+            return
+        }
         updatePointerHover(point)
         requestSmartAreas(at: point)
+        refreshWindowPick()
         refreshFullScreenControlVisibility()
         refreshCursor(at: point)
         needsDisplay = true
@@ -1602,6 +1937,14 @@ private final class ScreenshotOverlayView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         pointerIsInside = true
         hoverPoint = point
+        // A press anywhere on the screen closes the Options menu, as a click
+        // outside any menu does.
+        if screenCaptureOptions?.showsOptions == true { screenCaptureOptions?.showsOptions = false }
+        if let controller, controller.captureTarget != .portion, !controller.isPickingColor {
+            // Screen and window modes take a click; nothing is drawn.
+            pendingTargetClick = point
+            return
+        }
         if let current = adjustedSelection, let controller, let panel, !controller.isPickingColor {
             if event.clickCount >= 2, current.contains(point) {
                 controller.confirmRegion(current, on: panel)
@@ -1679,6 +2022,13 @@ private final class ScreenshotOverlayView: NSView {
     override func mouseUp(with event: NSEvent) {
         guard acceptsPointerInput, let controller, let panel else { return }
         let point = convert(event.locationInWindow, from: nil)
+        if let press = pendingTargetClick {
+            pendingTargetClick = nil
+            if ScreenshotSupport.isClick(from: press, to: point) {
+                takeTargetClick(at: point, controller: controller, panel: panel)
+            }
+            return
+        }
         guard let origin = dragOrigin else { return }
         dragOrigin = nil
         controller.spaceIsDown = false
@@ -1713,9 +2063,9 @@ private final class ScreenshotOverlayView: NSView {
             // A click takes the highlighted part: as a window when it is the
             // whole window, otherwise as an area, kept for adjusting if asked.
             if let windowID = smartWindowID, area == smartAreas.last, controller.acceptsWindowClick,
-               !controller.adjustsSelection {
+               !controller.keepsDrawnArea {
                 controller.confirmWindow(windowID, frame: area, on: panel)
-            } else if controller.adjustsSelection {
+            } else if controller.keepsDrawnArea {
                 clearSmartAreas()
                 beginAdjusting(area)
                 controller.setSelectionInProgress(false)
@@ -1753,7 +2103,7 @@ private final class ScreenshotOverlayView: NSView {
             needsDisplay = true
             return
         }
-        if controller.adjustsSelection, !controller.isPickingColor {
+        if controller.keepsDrawnArea, !controller.isPickingColor {
             beginAdjusting(selection)
             controller.setSelectionInProgress(false)
             refreshCursor(at: point)
@@ -1762,7 +2112,44 @@ private final class ScreenshotOverlayView: NSView {
         controller.confirmRegion(selection, on: panel)
     }
 
+    /// Screen mode takes the display that was clicked. Window mode takes the
+    /// part the pointer shows: the whole window, or a smaller part of it the
+    /// wheel stepped in to.
+    private func takeTargetClick(at point: CGPoint,
+                                 controller: ScreenshotSelectionController,
+                                 panel: ScreenshotOverlayPanel) {
+        switch controller.captureTarget {
+        case .screen:
+            controller.confirmScreen(on: panel)
+        case .window:
+            if let area = hoveredArea, area.contains(point) {
+                if let windowID = smartWindowID, area == smartAreas.last {
+                    controller.confirmWindow(windowID, frame: area, on: panel)
+                } else {
+                    controller.confirmRegion(area, on: panel)
+                }
+            } else if let target = ScreenshotSupport.window(at: point, in: windows) {
+                controller.confirmWindow(target.windowID, frame: target.frame, on: panel)
+            }
+        case .portion:
+            break
+        }
+    }
+
     func refreshGuideVisibility() {
+        if let toolbarHost, let optionsHost, let panel {
+            guideHost.isHidden = true
+            let global = controller?.currentPointerLocation ?? NSEvent.mouseLocation
+            let visible = ScreenshotSupport.captureGuideIsVisible(
+                pointerOnDisplay: NSMouseInRect(global, panel.screenFrame, false)
+                    || toolbarDragStart != nil,
+                selectionInProgress: controller?.selectionInProgress ?? true,
+                capturePending: isCapturePending)
+            toolbarHost.isHidden = !visible
+            optionsHost.isHidden = !visible || screenCaptureOptions?.showsOptions != true
+                || screenCaptureOptions?.selectedTool.offersOptions != true
+            return
+        }
         guard screenCaptureOptions?.controlsInNotch != true, let panel else {
             guideHost.isHidden = true
             return
@@ -1866,23 +2253,26 @@ private final class ScreenshotOverlayView: NSView {
         if selection.width > 0, selection.height > 0 {
             context.beginPath()
             context.addRect(bounds)
-            context.addPath(CGPath(roundedRect: selection,
-                                   cornerWidth: 8,
-                                   cornerHeight: 8,
-                                   transform: nil))
+            // Square corners, like the system's own area: the clear inside is
+            // exactly the area that will be taken.
+            context.addRect(selection)
             context.fillPath(using: .evenOdd)
             drawSelectionChrome(context, pixelScale: panel.pixelScale)
-            if !isDragging, let area = hoveredArea { drawWindowHighlight(context, rect: area) }
+            if !isDragging, let area = hoveredArea {
+                drawWindowHighlight(context, rect: area)
+                drawAreaBadge(area, pixelScale: panel.pixelScale)
+            }
+        } else if controller.captureTarget == .screen, !controller.isPickingColor {
+            // Screen mode leaves the picture clear and outlines the display
+            // a click would take.
+            if pointerIsInside { drawWindowHighlight(context, rect: bounds.insetBy(dx: 3, dy: 3)) }
         } else if dragOrigin == nil, let area = hoveredArea {
             context.beginPath()
             context.addRect(bounds)
             context.addRect(area)
             context.fillPath(using: .evenOdd)
             drawWindowHighlight(context, rect: area)
-            let pixelWidth = Int((area.width * panel.pixelScale).rounded())
-            let pixelHeight = Int((area.height * panel.pixelScale).rounded())
-            let level = smartAreas.count > 1 ? "  ·  scroll ↕ \(min(smartLevel, smartAreas.count - 1) + 1)/\(smartAreas.count)" : ""
-            drawBadge("\(pixelWidth) × \(pixelHeight)\(level)", near: CGPoint(x: area.midX, y: area.maxY + 10))
+            drawAreaBadge(area, pixelScale: panel.pixelScale)
         } else if dragOrigin == nil, hoveredWindow != nil {
             if let hovered = hoveredWindow {
                 context.beginPath()
@@ -1911,44 +2301,34 @@ private final class ScreenshotOverlayView: NSView {
         }
     }
 
+    /// The system recorder's look: a thin white dashed outline with a dark
+    /// hairline under it so it reads on light and dark pixels alike, and
+    /// eight round white handles, one per corner and one per edge.
     private func drawSelectionChrome(_ context: CGContext, pixelScale: CGFloat) {
-        let outer = CGPath(roundedRect: selection.insetBy(dx: -1.5, dy: -1.5),
-                           cornerWidth: 9,
-                           cornerHeight: 9,
-                           transform: nil)
-        let inner = CGPath(roundedRect: selection.insetBy(dx: -0.5, dy: -0.5),
-                           cornerWidth: 8,
-                           cornerHeight: 8,
-                           transform: nil)
+        let outline = selection.insetBy(dx: -0.75, dy: -0.75)
         context.saveGState()
-        context.setShadow(offset: .zero,
-                          blur: 9,
-                          color: CGColor(srgbRed: 0.18, green: 0.55, blue: 1, alpha: 0.55))
-        context.addPath(outer)
-        context.setStrokeColor(CGColor(srgbRed: 0.18, green: 0.55, blue: 1, alpha: 0.98))
-        context.setLineWidth(3)
-        context.strokePath()
+        context.setStrokeColor(CGColor(gray: 0, alpha: 0.45))
+        context.setLineWidth(2.5)
+        context.stroke(outline)
+        context.setStrokeColor(CGColor(gray: 1, alpha: 0.98))
+        context.setLineWidth(1.5)
+        context.setLineDash(phase: 0, lengths: ScreenshotSupport.selectionOutlineDash)
+        context.stroke(outline)
         context.restoreGState()
-        context.addPath(inner)
-        context.setStrokeColor(CGColor(gray: 1, alpha: 0.95))
-        context.setLineWidth(1)
-        context.strokePath()
 
         if isAdjusting {
-            for (handle, rect) in handleRects() {
+            for (_, rect) in handleRects() {
                 let center = CGPoint(x: rect.midX, y: rect.midY)
-                let dot: CGRect
-                switch handle {
-                case .topLeft, .topRight, .bottomRight, .bottomLeft:
-                    dot = CGRect(x: center.x - 4.5, y: center.y - 4.5, width: 9, height: 9)
-                default:
-                    guard selection.width > 40, selection.height > 40 else { continue }
-                    dot = CGRect(x: center.x - 3.5, y: center.y - 3.5, width: 7, height: 7)
-                }
+                let radius = ScreenshotSupport.selectionHandleRadius
+                let dot = CGRect(x: center.x - radius, y: center.y - radius,
+                                 width: radius * 2, height: radius * 2)
+                context.saveGState()
+                context.setShadow(offset: .zero, blur: 2.5, color: CGColor(gray: 0, alpha: 0.55))
                 context.setFillColor(CGColor(gray: 1, alpha: 1))
                 context.fillEllipse(in: dot)
-                context.setStrokeColor(CGColor(srgbRed: 0.18, green: 0.55, blue: 1, alpha: 1))
-                context.setLineWidth(1.5)
+                context.restoreGState()
+                context.setStrokeColor(CGColor(gray: 0, alpha: 0.28))
+                context.setLineWidth(0.75)
                 context.strokeEllipse(in: dot)
             }
         }
@@ -1957,6 +2337,17 @@ private final class ScreenshotOverlayView: NSView {
         let pixelHeight = Int((selection.height * pixelScale).rounded())
         drawBadge("\(pixelWidth) × \(pixelHeight)",
                   near: CGPoint(x: selection.midX, y: selection.maxY + 10))
+    }
+
+    /// The size of the part on offer, and where it sits among the parts the
+    /// wheel steps through.
+    private func drawAreaBadge(_ area: CGRect, pixelScale: CGFloat) {
+        let pixelWidth = Int((area.width * pixelScale).rounded())
+        let pixelHeight = Int((area.height * pixelScale).rounded())
+        let level = smartAreas.count > 1
+            ? "  ·  scroll ↕ \(min(smartLevel, smartAreas.count - 1) + 1)/\(smartAreas.count)"
+            : ""
+        drawBadge("\(pixelWidth) × \(pixelHeight)\(level)", near: CGPoint(x: area.midX, y: area.maxY + 10))
     }
 
     private func drawWindowHighlight(_ context: CGContext, rect: CGRect) {
@@ -2326,7 +2717,7 @@ private struct FullScreenCaptureButton: View {
 /// the live desktop instead of the still the person is aiming at. The plate is
 /// the part that fixes contrast anyway, so keep the material these panels
 /// already draw and add only the plate over it.
-private struct CaptureChromeBackdrop<S: Shape>: View {
+struct CaptureChromeBackdrop<S: Shape>: View {
     let material: Material
     let shape: S
 

@@ -2137,7 +2137,7 @@ def main():
           + "}\nfinal class Selection {\n"
           + "final class Options { var controlsInNotch = true; var hasFocusedControl = false; var showsOptions = false }\n"
           + "var captureTarget = ScreenCaptureTarget.portion\n"
-          + 'func confirmFromToolbar() -> Bool { actions.append("toolbar"); return true }\n'
+          + 'func confirmWindowFromKeyboard() { actions.append("window") }\n'
           + "enum Outcome { case cancelled }\nvar screenCaptureOptions: Options? = Options()\n"
           + "var keyMonitor: Any?\nvar globalKeyMonitor: Any?\nvar spaceIsDown = false\n"
           + "var acceptsWindowClick = true\nvar loupeAcceptsKeyboardActions = false\n"

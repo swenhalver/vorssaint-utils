@@ -328,6 +328,12 @@ final class ScreenshotService: ObservableObject {
         route(capture)
     }
 
+    /// The capture toolbar's Markup button: straight into the editor, whose
+    /// Save then saves the marked-up picture and copies its file.
+    func receiveMarkupCapture(_ capture: ScreenshotSelectionController.Capture) {
+        route(capture, opensEditor: true)
+    }
+
     func receiveUnifiedScrollingRegion(_ region: RecorderSupport.Region) {
         captureScrolling(region)
     }
@@ -443,18 +449,22 @@ final class ScreenshotService: ObservableObject {
     /// The clipboard copy happens first and independently, so it also reaches
     /// the captures that open straight in the editor, where no preview button
     /// exists to reach for.
-    private func route(_ capture: ScreenshotSelectionController.Capture) {
+    private func route(_ capture: ScreenshotSelectionController.Capture, opensEditor: Bool = false) {
         beginLatestCapture(capture)
         // The island's companion blinks hard, as a flash, if it is there to see.
         NotchService.shared.reactMascot(.flash, patience: 1)
         preview?.close()
         RecentCaptureService.shared.recordScreenshot(capture)
         let defaults = UserDefaults.standard
-        if defaults.bool(forKey: DefaultsKey.screenshotCopyToClipboard) {
+        // With every capture saved and copied as a file, copying the bare
+        // picture first would only be overwritten a moment later.
+        let copiesFiles = ScreenshotSupport.capturesCopyToClipboard(in: defaults)
+        if defaults.bool(forKey: DefaultsKey.screenshotCopyToClipboard), !copiesFiles {
             autoCopy(capture)
         }
-        let defaultAction = ScreenshotDefaultAction.current
-        if defaultAction == .edit {
+        let defaultAction = ScreenshotSupport.effectiveDefaultAction(
+            ScreenshotDefaultAction.current, copiesToClipboard: copiesFiles)
+        if defaultAction == .edit || opensEditor {
             // The editor decides what is kept. Its Add to Shelf puts the
             // finished picture there, so the raw capture is not shelved too.
             openEditor(with: capture)

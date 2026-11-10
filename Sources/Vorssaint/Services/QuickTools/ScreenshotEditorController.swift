@@ -1761,8 +1761,13 @@ final class ScreenshotEditorController: NSObject, NSWindowDelegate {
             try file.data.write(to: url, options: .atomic)
             ScreenshotSupport.markAsScreenCapture(url)
             model.markExported()
+            // Saved like every capture, so copied like one too: the file, the
+            // way Finder copies it, with the picture beside it.
+            let copied = ScreenshotSupport.capturesCopyToClipboard()
+                && Self.copyFile(url, payload: Self.clipboardPayload(from: export))
             QuickToolHUD.show(icon: "camera.viewfinder",
-                              message: String(format: strings.savedHUDFormat,
+                              message: String(format: copied ? strings.savedAndCopiedHUDFormat
+                                                             : strings.savedHUDFormat,
                                               url.deletingLastPathComponent().lastPathComponent))
             window?.close()
         } catch {

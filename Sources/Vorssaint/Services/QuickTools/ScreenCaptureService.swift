@@ -4,6 +4,16 @@
 import AppKit
 import Combine
 
+/// What the capture toolbar asks of the selection surface.
+enum CaptureToolbarAction {
+    /// The big button: Capture, Record, or the tool's own verb.
+    case confirm
+    /// Take the current area, window or screen as a picture and open it in
+    /// the markup editor, whatever mode the toolbar is in.
+    case markup
+    case close
+}
+
 /// Shared state for the chooser. Every overlay panel observes the same value,
 /// so changing a mode on one display updates the controls on all displays.
 final class ScreenCaptureSelectionOptions: ObservableObject {
@@ -16,22 +26,65 @@ final class ScreenCaptureSelectionOptions: ObservableObject {
     var onCaptureControlsSurfaceChange: ((CGRect, CGFloat) -> Void)?
     let recorderAudio = RecorderSelectionAudioOptions()
     @Published private(set) var selectedTool: ScreenCaptureTool
+    /// Screen, window or portion. The notch's controls predate the toolbar
+    /// and always pick a portion, which also takes a clicked window.
+    @Published private(set) var target: ScreenCaptureTarget
     @Published var offersRepeatLastRegion = false
+    /// The toolbar's Options menu is open.
+    @Published var showsOptions = false
+    /// Set by the Markup button for the capture it starts, and read once
+    /// when that capture is routed.
+    var markupRequested = false
     var onSelectionChange: (() -> Void)?
+    var onTargetChange: (() -> Void)?
+    var onToolbarAction: ((CaptureToolbarAction) -> Void)?
+    /// A drag of the toolbar: the translation so far, then nil when it ends.
+    var onToolbarDrag: ((CGSize?) -> Void)?
 
     init(availableTools: [ScreenCaptureTool], selectedTool: ScreenCaptureTool,
-         showsCaptureMenu: Bool, controlsInNotch: Bool = false) {
+         showsCaptureMenu: Bool, controlsInNotch: Bool = false,
+         defaults: UserDefaults = .standard) {
         precondition(availableTools.contains(selectedTool))
         self.availableTools = availableTools
         self.selectedTool = selectedTool
         self.showsCaptureMenu = showsCaptureMenu
         self.controlsInNotch = controlsInNotch
+        self.target = controlsInNotch
+            ? .portion
+            : ScreenCaptureTarget.remembered(for: selectedTool) { defaults.string(forKey: $0) }
     }
 
+    var mode: CaptureToolbarMode { CaptureToolbarMode(tool: selectedTool, target: target) }
+
+    /// A tool picked by its digit key or from the notch opens on the target
+    /// it was last used with.
     func select(_ tool: ScreenCaptureTool) {
         guard availableTools.contains(tool), selectedTool != tool else { return }
-        selectedTool = tool
-        onSelectionChange?()
+        let nextTarget = controlsInNotch
+            ? .portion
+            : ScreenCaptureTarget.remembered(for: tool) { UserDefaults.standard.string(forKey: $0) }
+        apply(tool: tool, target: nextTarget)
+    }
+
+    func select(_ mode: CaptureToolbarMode) {
+        guard availableTools.contains(mode.tool) else { return }
+        if let key = mode.tool.rememberedTargetKey {
+            UserDefaults.standard.set(mode.target.rawValue, forKey: key)
+        }
+        apply(tool: mode.tool, target: mode.target)
+    }
+
+    private func apply(tool: ScreenCaptureTool, target nextTarget: ScreenCaptureTarget) {
+        let toolChanged = selectedTool != tool
+        let targetChanged = target != nextTarget
+        guard toolChanged || targetChanged else { return }
+        target = nextTarget
+        if toolChanged {
+            selectedTool = tool
+            if !tool.offersOptions { showsOptions = false }
+            onSelectionChange?()
+        }
+        if targetChanged { onTargetChange?() }
     }
 }
 
@@ -249,6 +302,12 @@ final class ScreenCaptureService: ObservableObject {
             options.onCaptureControlsSurfaceChange = nil
             self.selection = nil
             self.options = nil
+            let markup = options.markupRequested
+            options.markupRequested = false
+            if markup, AppFeature.screenshot.isAvailable {
+                self.routeMarkup(outcome)
+                return
+            }
             self.route(outcome, selected: options.selectedTool,
                        recorderAudio: options.recorderAudio)
         }
@@ -302,6 +361,48 @@ final class ScreenCaptureService: ObservableObject {
             break
         case .failed:
             showFailure(for: selected)
+        }
+    }
+
+    /// The toolbar's Markup button: whatever the mode, the area, window or
+    /// screen becomes a picture in the markup editor. Record modes chose an
+    /// area rather than pixels, so the picture is taken once the surface has
+    /// left the screen, the same way a live screenshot is.
+    private func routeMarkup(_ outcome: ScreenshotSelectionController.Outcome) {
+        switch outcome {
+        case .captured(let capture):
+            ScreenshotService.shared.receiveMarkupCapture(capture)
+        case .region(let region), .scrollingRegion(let region):
+            let defaults = UserDefaults.standard
+            let includePointer = defaults.bool(forKey: DefaultsKey.screenshotIncludePointer)
+            let hideWindows = defaults.bool(forKey: DefaultsKey.screenshotHideVorssaintWindows)
+            let protected = ScreenshotService.shared
+                .protectedWindowIDsForCapture(honoursVisibilityPreference: true)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                var capture: ScreenshotSelectionController.Capture?
+                if let windowID = region.windowID,
+                   let window = await ScreenshotCaptureEngine.captureWindow(windowID, scale: region.scale) {
+                    capture = .init(image: window.image, scale: window.scale, anchorRect: region.anchorRect)
+                } else if let image = await ScreenshotCaptureEngine.captureDisplay(
+                    region.displayID, includePointer: includePointer,
+                    hideVorssaintWindows: hideWindows, protectedWindowIDs: protected) {
+                    let clamped = ScreenshotSupport.clamp(
+                        region.pixelRect, to: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+                    if let cropped = image.cropping(to: clamped) {
+                        capture = .init(image: cropped, scale: region.scale, anchorRect: region.anchorRect)
+                    }
+                }
+                guard let capture else {
+                    self?.showFailure(for: .screenshot)
+                    return
+                }
+                ScreenshotService.shared.receiveMarkupCapture(capture)
+            }
+        case .color, .cancelled:
+            break
+        case .failed:
+            showFailure(for: .screenshot)
         }
     }
 

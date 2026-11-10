@@ -135,7 +135,11 @@ enum PointerOnDisplayContract {
     /// One display's capture overlay deciding whether its guide shows.
     final class Overlay {
         typealias NSEvent = Event
-        struct Options { let controlsInNotch: Bool }
+        struct Options {
+            let controlsInNotch: Bool
+            var showsOptions = false
+            var selectedTool = ScreenCaptureTool.screenshot
+        }
         final class Controller {
             var currentPointerLocation: CGPoint?
             var selectionInProgress = false
@@ -149,6 +153,11 @@ enum PointerOnDisplayContract {
         let controller: Controller? = Controller()
         let panel: Panel?
         let guideHost = Guide()
+        // The system-style toolbar belongs to the unified chooser; this
+        // contract covers the hint bar, so it has none.
+        let toolbarHost: Guide? = nil
+        let optionsHost: Guide? = nil
+        let toolbarDragStart: CGPoint? = nil
         let isCapturePending = false
         let displayID: CGDirectDisplayID
         init(_ screen: Screen) {
