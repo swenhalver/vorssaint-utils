@@ -8,7 +8,10 @@ import QuartzCore
 /// Pushes the built-in XDR display past its regular maximum brightness by
 /// using the panel's HDR headroom for everything on screen.
 ///
-/// Mechanism: click-through overlay windows covering the screen (its two
+/// Mechanism: the panel's gamma curve is scaled past one (see `GammaBoost`)
+/// while a one-pixel extended range window keeps the panel's headroom open.
+/// When the curve cannot be read, the older overlay takes over:
+/// click-through overlay windows covering the screen (its two
 /// halves, see `ExtraBrightnessSupport.overlayFrames`) each hold a Metal layer
 /// whose compositing filter is "multiply". The layer renders a solid gray
 /// above 1.0 in extended linear sRGB, so the window server multiplies every
@@ -74,6 +77,13 @@ final class ExtraBrightnessService: ObservableObject {
     /// same panel re-announce itself (refresh rate and EDR mode changes);
     /// those must reuse the live windows, not rebuild them.
     private var overlayDisplayID: UInt32?
+    /// The boost written into the built-in panel's gamma curve instead of the
+    /// multiply windows. A screen-sized overlay dropped out whenever another
+    /// app captured the screen (ChatGPT looking at an app window turned the
+    /// boost off); the curve sits after the compositor, so captures neither
+    /// see it nor disturb it. Nil when the curve cannot be read, and the
+    /// multiply windows take over.
+    private var gammaBoost: GammaBoost?
 
     private init() {}
 
@@ -181,6 +191,8 @@ final class ExtraBrightnessService: ObservableObject {
         overlayWindows = []
         overlayLayers = []
         overlayDisplayID = nil
+        gammaBoost?.restore()
+        gammaBoost = nil
         triggerWindow?.orderOut(nil)
         triggerWindow = nil
         triggerLayer = nil
@@ -240,7 +252,7 @@ final class ExtraBrightnessService: ObservableObject {
             handleScreenChange()
             return
         }
-        if !overlayWindows.isEmpty, let triggerWindow,
+        if !overlayWindows.isEmpty || gammaBoost != nil, let triggerWindow,
            ExtraBrightnessSupport.canReuseSpaceWindows(
                sameDisplay: overlayDisplayID == Self.displayID(of: screen),
                inOwnSpace: overlaySpace != nil,
@@ -277,7 +289,12 @@ final class ExtraBrightnessService: ObservableObject {
         // headroom every time. Rebuilding the overlay for each one blinked
         // the boost off and on; with the panel and frame unchanged nothing
         // happens here at all and the poll keeps its own pace.
-        if !overlayWindows.isEmpty, overlayDisplayID == Self.displayID(of: screen) {
+        if gammaBoost != nil, overlayDisplayID == Self.displayID(of: screen) {
+            if let triggerWindow, triggerWindow.frame != Self.triggerFrame(on: screen) {
+                triggerWindow.setFrame(Self.triggerFrame(on: screen), display: false)
+                renderIfNeeded()
+            }
+        } else if !overlayWindows.isEmpty, overlayDisplayID == Self.displayID(of: screen) {
             let frames = ExtraBrightnessSupport.overlayFrames(for: screen.frame)
             if overlayWindows.map(\.frame) != frames {
                 for (window, frame) in zip(overlayWindows, frames) {
@@ -351,6 +368,20 @@ final class ExtraBrightnessService: ObservableObject {
 
         guard let device = MTLCreateSystemDefaultDevice(),
               let queue = device.makeCommandQueue() else { return }
+        let displayID = Self.displayID(of: screen)
+        if let gammaBoost, gammaBoost.displayID != displayID {
+            gammaBoost.restore()
+            self.gammaBoost = nil
+        }
+        if gammaBoost == nil, let displayID { gammaBoost = GammaBoost(displayID: displayID) }
+        if gammaBoost != nil {
+            overlayDisplayID = displayID
+            metalDevice = device
+            commandQueue = queue
+            render(factor: renderedFactor)
+            showTrigger(on: screen, device: device, queue: queue)
+            return
+        }
         for frame in ExtraBrightnessSupport.overlayFrames(for: screen.frame) {
             let window = NSWindow(contentRect: frame, styleMask: [.borderless],
                                   backing: .buffered, defer: false)
@@ -473,7 +504,7 @@ final class ExtraBrightnessService: ObservableObject {
     /// snaps straight to the target.
     private func renderIfNeeded(immediate: Bool = false) {
         guard !screensAsleep else { return }
-        guard let screen = overlayScreen, !overlayLayers.isEmpty else { return }
+        guard let screen = overlayScreen, !overlayLayers.isEmpty || gammaBoost != nil else { return }
         // SecurityAgent's Touch ID / password panel and the Mac App Store's
         // PassKit purchase-authorization sheet (used even for free "Get"
         // installs) both stayed permanently hidden behind this overlay while
@@ -485,7 +516,9 @@ final class ExtraBrightnessService: ObservableObject {
         // third-party app's own in-app purchase flow — that would not make
         // the App Store frontmost, and neither signal here is confirmed to
         // catch it; that path is still untested and may still be affected.
-        guard !Self.systemAuthorizationUIIsActive() else {
+        // Only the screen-sized multiply windows ever covered those sheets;
+        // the gamma boost has nothing on screen but its one-pixel trigger.
+        guard gammaBoost != nil || !Self.systemAuthorizationUIIsActive() else {
             overlayWindows.forEach { $0.orderOut(nil) }
             triggerWindow?.orderOut(nil)
             return
@@ -519,6 +552,12 @@ final class ExtraBrightnessService: ObservableObject {
     /// the screen. All halves present from one command buffer, or none does,
     /// so they never show different factors.
     private func render(factor: Double, waitUntilScheduled: Bool = false) {
+        if let gammaBoost {
+            gammaBoost.apply(factor: factor)
+            let visible = factor > 1.001
+            if boosting != visible { boosting = visible }
+            return
+        }
         let drawables = overlayLayers.compactMap { $0.nextDrawable() }
         guard !drawables.isEmpty, drawables.count == overlayLayers.count,
               let queue = commandQueue,
@@ -538,5 +577,71 @@ final class ExtraBrightnessService: ObservableObject {
         if waitUntilScheduled { commands.waitUntilScheduled() }
         let visible = factor > 1.001
         if boosting != visible { boosting = visible }
+    }
+}
+
+/// The panel's own gamma curve scaled above one. With the trigger pixel
+/// holding the panel's headroom open, values past one light the panel past
+/// its regular maximum, the same way the multiply windows did, but after the
+/// compositor: screen captures by other apps no longer switch it off, and
+/// none of them see it. Quartz puts every curve back when the app exits, so
+/// a crash cannot leave the panel boosted.
+private final class GammaBoost {
+    /// The coefficient the curve tops out at; past it highlights only clip.
+    static let maximumScale: Float = 1.6
+
+    let displayID: CGDirectDisplayID
+    private var baseline: [[CGGammaValue]]
+    private var lastWritten: [[CGGammaValue]]?
+
+    init?(displayID: CGDirectDisplayID) {
+        guard let curve = Self.read(displayID) else { return nil }
+        self.displayID = displayID
+        baseline = curve
+    }
+
+    /// Rewritten every tick, unchanged or not: macOS replaces the curve when
+    /// a colour profile or another app's capture resets the display.
+    func apply(factor: Double) {
+        // Someone else replaced the curve (a new colour profile): that is the
+        // new normal to scale from. Ours or the untouched one read back as
+        // either of the two known curves.
+        if let live = Self.read(displayID), !Self.matches(live, baseline),
+           !(lastWritten.map { Self.matches(live, $0) } ?? false) {
+            baseline = live
+        }
+        let scale = min(max(Float(factor), 1), Self.maximumScale)
+        let curve = scale <= 1.0001 ? baseline : baseline.map { $0.map { $0 * scale } }
+        guard write(curve) else { return }
+        lastWritten = curve
+    }
+
+    func restore() {
+        if write(baseline) { lastWritten = nil }
+    }
+
+    private func write(_ curve: [[CGGammaValue]]) -> Bool {
+        CGSetDisplayTransferByTable(displayID, UInt32(curve[0].count), curve[0], curve[1], curve[2]) == .success
+    }
+
+    private static func read(_ id: CGDirectDisplayID) -> [[CGGammaValue]]? {
+        let capacity = 1024
+        var red = [CGGammaValue](repeating: 0, count: capacity)
+        var green = [CGGammaValue](repeating: 0, count: capacity)
+        var blue = [CGGammaValue](repeating: 0, count: capacity)
+        var count: UInt32 = 0
+        guard CGGetDisplayTransferByTable(id, UInt32(capacity), &red, &green, &blue, &count) == .success,
+              count > 1 else { return nil }
+        let samples = Int(min(count, UInt32(capacity)))
+        return [Array(red.prefix(samples)), Array(green.prefix(samples)), Array(blue.prefix(samples))]
+    }
+
+    private static func matches(_ a: [[CGGammaValue]], _ b: [[CGGammaValue]]) -> Bool {
+        guard a.count == b.count else { return false }
+        for (x, y) in zip(a, b) {
+            guard x.count == y.count else { return false }
+            for (u, v) in zip(x, y) where abs(u - v) > 0.002 { return false }
+        }
+        return true
     }
 }
