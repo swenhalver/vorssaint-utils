@@ -534,7 +534,11 @@ final class ExtraBrightnessService: ObservableObject {
         let instantaneous = ExtraBrightnessSupport.renderFactor(level: level, currentEDR: headroom,
                                                                 potentialEDR: potential,
                                                                 reference: Self.panelReference)
-        if immediate {
+        // The gamma boost tops out well inside any granted headroom, so it has
+        // none of the multiply overlay's flashing to smooth over: once the
+        // panel is engaged it goes straight to the level instead of creeping
+        // up for seconds. Dropouts still take the graced, ramped path below.
+        if immediate || (gammaBoost != nil && engaged) {
             renderedFactor = instantaneous
         } else {
             let target = ExtraBrightnessSupport.gracedTarget(instantaneous: instantaneous,
