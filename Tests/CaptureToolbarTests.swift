@@ -177,12 +177,23 @@ enum CaptureToolbarTests {
                      && ScreenshotSupport.selectionHandleRadius >= 4,
                      "the editable area is outlined with dashes and grabbable round handles")
 
+        // MARK: Clipboard only
+
+        let clipboardPath = RecorderSupport.clipboardOnlyFolder.path
+        suite.expect(RecorderSupport.isClipboardOnly(clipboardPath)
+                     && RecorderSupport.isClipboardOnly(clipboardPath + "/")
+                     && !RecorderSupport.isClipboardOnly("")
+                     && !RecorderSupport.isClipboardOnly(NSHomeDirectory() + "/Desktop"),
+                     "Clipboard only is recognized by its hidden folder and nothing else")
+        suite.expect(clipboardPath.contains("/Caches/"),
+                     "Clipboard only captures live in Caches, out of sight")
+
         // MARK: Strings
 
         for language in AppLanguage.allCases {
             let strings = FeatureStrings.captureToolbar(language)
             let values = Mirror(reflecting: strings).children.compactMap { $0.value as? String }
-            suite.expect(values.count == 21 && values.allSatisfy { !$0.trimmingCharacters(in: .whitespaces).isEmpty },
+            suite.expect(values.count == 22 && values.allSatisfy { !$0.trimmingCharacters(in: .whitespaces).isEmpty },
                          "\(language.rawValue): every toolbar string is translated")
             suite.expect(values.allSatisfy { !$0.contains("\u{2014}") && !$0.contains("...") },
                          "\(language.rawValue): toolbar strings follow the punctuation rules")

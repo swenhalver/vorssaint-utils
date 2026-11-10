@@ -1665,6 +1665,11 @@ private final class ScreenshotOverlayView: NSView {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.smartQueryInFlight = false
+                // The pointer reached the toolbar while this was looked up.
+                if let window = self.window,
+                   self.pointerIsOverToolbar(self.convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
+                    return
+                }
                 let areas = found.map { $0.offsetBy(dx: -offset.x, dy: -offset.y) }
                 if let pending = self.smartPendingPoint {
                     self.smartPendingPoint = nil
@@ -1872,8 +1877,15 @@ private final class ScreenshotOverlayView: NSView {
         controller?.currentPointerLocation = nil
         let point = convert(event.locationInWindow, from: nil)
         if pointerIsOverToolbar(point) {
-            // On the way to the toolbar's button the pointer crosses other
-            // windows; what it showed before reaching the toolbar stays.
+            // The toolbar is not part of the picture: nothing under it is
+            // offered while the pointer is on it. Window mode keeps its last
+            // pick, so the Capture button still takes the window shown before.
+            smartPendingPoint = nil
+            clearSmartAreas()
+            if hoveredWindow != nil {
+                hoveredWindow = nil
+                needsDisplay = true
+            }
             refreshCursor(at: point)
             return
         }

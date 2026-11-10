@@ -765,6 +765,37 @@ enum RecorderSupport {
         return choices
     }
 
+    /// "Clipboard only": captures still need a file to paste as one, so they
+    /// land in this hidden cache folder instead of a folder the person sees.
+    static var clipboardOnlyFolder: URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return caches.appendingPathComponent("com.vorssaint.utils/Clipboard captures", isDirectory: true)
+    }
+
+    static func isClipboardOnly(_ stored: String) -> Bool {
+        guard !stored.isEmpty else { return false }
+        return ((stored as NSString).expandingTildeInPath as NSString).standardizingPath
+            == (clipboardOnlyFolder.path as NSString).standardizingPath
+    }
+
+    /// Creates the folder and drops captures older than two days, long after
+    /// anyone would still paste them.
+    @discardableResult
+    static func prepareClipboardOnlyFolder(now: Date = Date()) -> URL {
+        let manager = FileManager.default
+        let folder = clipboardOnlyFolder
+        try? manager.createDirectory(at: folder, withIntermediateDirectories: true)
+        let files = (try? manager.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for file in files {
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let modified, now.timeIntervalSince(modified) > 2 * 24 * 3600 {
+                try? manager.removeItem(at: file)
+            }
+        }
+        return folder
+    }
+
     // MARK: - Finished file
 
     /// Where an export is written before it takes the destination's place.

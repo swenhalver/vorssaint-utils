@@ -851,6 +851,7 @@ final class ScreenRecorderService: ObservableObject {
         let manager = FileManager.default
         var folder: URL?
         let stored = UserDefaults.standard.string(forKey: DefaultsKey.recorderSaveFolder) ?? ""
+        if RecorderSupport.isClipboardOnly(stored) { RecorderSupport.prepareClipboardOnlyFolder() }
         if !stored.isEmpty {
             let expanded = (stored as NSString).expandingTildeInPath
             var isDirectory: ObjCBool = false

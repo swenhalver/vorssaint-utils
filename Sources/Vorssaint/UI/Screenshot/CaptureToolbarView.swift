@@ -47,16 +47,16 @@ struct CaptureToolbarView: View {
                 primaryButton
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background(CaptureChromeBackdrop(
             material: .regularMaterial,
-            shape: RoundedRectangle(cornerRadius: 12, style: .continuous)))
+            shape: RoundedRectangle(cornerRadius: 14, style: .continuous)))
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         // Window coordinates: the panel never moves, so the translation stays
         // steady while the toolbar itself follows it.
         .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .global)
@@ -68,8 +68,8 @@ struct CaptureToolbarView: View {
     private var separator: some View {
         Rectangle()
             .fill(Color.primary.opacity(0.16))
-            .frame(width: 1, height: 22)
-            .padding(.horizontal, 5)
+            .frame(width: 1, height: 28)
+            .padding(.horizontal, 6)
     }
 
     private func title(of mode: CaptureToolbarMode) -> String {
@@ -87,13 +87,13 @@ struct CaptureToolbarView: View {
                             tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .regular))
+                .font(.system(size: 21, weight: .regular))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(tint)
-                .frame(width: 34, height: 28)
+                .frame(width: 42, height: 36)
                 .background(Color.primary.opacity(selected ? 0.18 : hovered == id ? 0.08 : 0),
-                            in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 ? id : (hovered == id ? nil : hovered) }
@@ -107,16 +107,16 @@ struct CaptureToolbarView: View {
         } label: {
             HStack(spacing: 4) {
                 Text(strings.optionsButton)
-                    .font(.system(size: 13))
+                    .font(.system(size: 14))
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
             }
             .foregroundStyle(.primary)
-            .padding(.horizontal, 9)
-            .frame(height: 28)
+            .padding(.horizontal, 10)
+            .frame(height: 36)
             .background(Color.primary.opacity(options.showsOptions ? 0.18 : hovered == "options" ? 0.08 : 0),
-                        in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 ? "options" : (hovered == "options" ? nil : hovered) }
@@ -128,14 +128,14 @@ struct CaptureToolbarView: View {
             options.onToolbarAction?(.confirm)
         } label: {
             Text(options.selectedTool == .recording ? strings.recordButton : strings.captureButton)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .lineLimit(1)
                 .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .frame(height: 28)
+                .padding(.horizontal, 16)
+                .frame(height: 36)
                 .background(Color.accentColor.opacity(hovered == "primary" ? 1 : 0.9),
-                            in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .padding(.leading, 4)
@@ -179,6 +179,11 @@ struct CaptureOptionsCard: View {
         VStack(alignment: .leading, spacing: 8) {
             if tool == .screenshot || tool == .recording {
                 section(recorderStrings.folderLabel) {
+                    row(id: "folder-clipboard-only", title: strings.clipboardOnlyChoice, checked: clipboardOnly) {
+                        let stored = RecorderSupport.clipboardOnlyFolder.path
+                        if tool == .recording { recorderFolder = stored } else { screenshotFolder = stored }
+                        copiesToClipboard = true
+                    }
                     ForEach(folderChoices, id: \.path) { choice in
                         row(id: "folder-\(choice.path)",
                             title: FileManager.default.displayName(atPath: choice.path),
@@ -233,8 +238,10 @@ struct CaptureOptionsCard: View {
                     }
                 }
                 if tool == .screenshot || tool == .recording {
-                    row(id: "clipboard", title: strings.copyToClipboardToggle, checked: copiesToClipboard) {
-                        copiesToClipboard.toggle()
+                    // Clipboard only is pointless without the copy, so it stays on.
+                    row(id: "clipboard", title: strings.copyToClipboardToggle,
+                        checked: copiesToClipboard || clipboardOnly) {
+                        if !clipboardOnly { copiesToClipboard.toggle() }
                     }
                 }
             }
@@ -267,10 +274,19 @@ struct CaptureOptionsCard: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    private var storedFolder: String { tool == .recording ? recorderFolder : screenshotFolder }
+
+    private var clipboardOnly: Bool { RecorderSupport.isClipboardOnly(storedFolder) }
+
+    /// The hidden clipboard folder is not a folder to list: with it chosen,
+    /// only the Clipboard only row is checked.
     private var folderChoices: [RecorderSupport.SaveFolderChoice] {
-        RecorderSupport.saveFolderChoices(
-            stored: tool == .recording ? recorderFolder : screenshotFolder,
-            home: FileManager.default.homeDirectoryForCurrentUser.path)
+        let choices = RecorderSupport.saveFolderChoices(
+            stored: storedFolder, home: FileManager.default.homeDirectoryForCurrentUser.path)
+        guard clipboardOnly else { return choices }
+        return choices
+            .filter { !RecorderSupport.isClipboardOnly($0.path) }
+            .map { RecorderSupport.SaveFolderChoice(storedValue: $0.storedValue, path: $0.path, isSelected: false) }
     }
 
     private var timer: Int { ScreenshotSupport.sanitizedDelay(recorderCountdown) }
