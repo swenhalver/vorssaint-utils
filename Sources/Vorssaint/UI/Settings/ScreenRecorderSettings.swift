@@ -19,6 +19,9 @@ struct ScreenRecordingCaptureSettings: View {
     @AppStorage(DefaultsKey.recorderMicrophone) private var microphone = false
     @AppStorage(DefaultsKey.recorderSaveFolder) private var saveFolder = ""
     @AppStorage(DefaultsKey.recorderOpenEditor) private var opensEditor = true
+    @AppStorage(DefaultsKey.recorderFloatingThumbnail) private var floatingThumbnail = true
+    @AppStorage(DefaultsKey.recorderShowClicks) private var showsClicks = false
+    @AppStorage(DefaultsKey.captureCopiesToClipboard) private var copiesToClipboard = true
     @AppStorage(DefaultsKey.recorderAutomaticZoom) private var automaticZoom = true
     @AppStorage(DefaultsKey.recorderGIFFrameRate) private var gifFrameRate = 12
     @AppStorage(DefaultsKey.recorderSharingEnabled) private var sharingEnabled = true
@@ -38,6 +41,10 @@ struct ScreenRecordingCaptureSettings: View {
         FeatureStrings.screenshot(l10n.language)
     }
 
+    private var toolbarStrings: CaptureToolbarStrings {
+        FeatureStrings.captureToolbar(l10n.language)
+    }
+
     var body: some View {
         Group {
             Section {
@@ -53,6 +60,9 @@ struct ScreenRecordingCaptureSettings: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                Text(toolbarStrings.stopHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 if !permissions.screenRecording {
                     PermissionRow(kind: .screenRecording)
                 }
@@ -96,8 +106,30 @@ struct ScreenRecordingCaptureSettings: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Toggle(strings.openEditorToggle, isOn: $opensEditor)
-                    Text(strings.openEditorCaption)
+                    Toggle(toolbarStrings.floatingThumbnailToggle, isOn: $floatingThumbnail)
+                    Text(toolbarStrings.floatingThumbnailCaption)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                // The thumbnail's click is the way into the editor; without the
+                // thumbnail, this decides between the editor and a file.
+                if !floatingThumbnail {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle(strings.openEditorToggle, isOn: $opensEditor)
+                        Text(strings.openEditorCaption)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(toolbarStrings.showClicksToggle, isOn: $showsClicks)
+                    Text(toolbarStrings.showClicksCaption)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(toolbarStrings.copyToClipboardToggle, isOn: $copiesToClipboard)
+                    Text(toolbarStrings.copyToClipboardCaption)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -279,6 +279,12 @@ final class ScreenRecorderService: ObservableObject {
     private var session: RecorderSession?
     private var indicator: RecorderIndicator?
     private var editors: [RecorderEditorController] = []
+    /// Stopped recordings waiting in the corner, the way the system's do.
+    private var thumbnails: [RecorderThumbnailController] = []
+    /// Takes being written out as recorded, kept from the sweep meanwhile
+    /// and saved at once if the app quits before the export ends.
+    private var savingExports: [UUID: RecorderQuickExport] = [:]
+    private var terminationObserver: NSObjectProtocol?
     private var mediaOwnedEditorIDs: Set<ObjectIdentifier> = []
     private var elapsedTimer: Timer?
     private var countdown: DispatchWorkItem?
@@ -298,7 +304,17 @@ final class ScreenRecorderService: ObservableObject {
         FeatureStrings.recorder(L10n.shared.language)
     }
 
-    private init() {}
+    private init() {
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            for export in self.savingExports.values {
+                self.saveSynchronously(export.take, export: export)
+            }
+            self.savingExports.removeAll()
+        }
+    }
 
     // MARK: - Preferences
 
@@ -321,6 +337,9 @@ final class ScreenRecorderService: ObservableObject {
         for editor in recorderOwnedEditors {
             editor.close()
         }
+        // A waiting thumbnail is a finished recording: it saves rather than
+        // disappearing with the feature.
+        thumbnails.forEach { $0.commit() }
         if session != nil {
             stop()
         }
@@ -405,9 +424,12 @@ final class ScreenRecorderService: ObservableObject {
     func record(_ region: RecorderSupport.Region,
                 audioOptions: RecorderSelectionAudioOptions) {
         guard prepareForSelection() else { return }
+        // A new recording sends the last one's thumbnail on its way first.
+        thumbnails.forEach { $0.commit() }
         let indicator = RecorderIndicator(
             onPause: { [weak self] in self?.togglePause() },
-            onStop: { [weak self] in self?.stop() })
+            onStop: { [weak self] in self?.stop() },
+            onCancel: { [weak self] in _ = self?.stopOrCancelActiveCapture() })
         indicator.showRegionGuide(for: region)
         self.indicator = indicator
         pendingStartGeneration &+= 1
@@ -455,6 +477,7 @@ final class ScreenRecorderService: ObservableObject {
             return
         }
         countdownRemaining = delay
+        indicator?.setCountdownCancelsOnEscape(true)
         tickCountdown(region: region, generation: generation)
     }
 
@@ -462,6 +485,7 @@ final class ScreenRecorderService: ObservableObject {
         guard pendingStartIsAuthorized(generation) else { return }
         guard countdownRemaining > 0 else {
             countdown = nil
+            indicator?.setCountdownCancelsOnEscape(false)
             beginRecording(region: region, generation: generation)
             return
         }
@@ -540,7 +564,8 @@ final class ScreenRecorderService: ObservableObject {
         // the picture.
         let indicator = indicator ?? RecorderIndicator(
             onPause: { [weak self] in self?.togglePause() },
-            onStop: { [weak self] in self?.stop() })
+            onStop: { [weak self] in self?.stop() },
+            onCancel: { [weak self] in _ = self?.stopOrCancelActiveCapture() })
         indicator.show(on: NSScreen.screens.first { $0.displayID == region.displayID },
                        tooltip: strings.indicatorTooltip,
                        pauseTooltip: strings.pauseButton,
@@ -679,7 +704,7 @@ final class ScreenRecorderService: ObservableObject {
             self.session = nil
             self.isFinishing = false
             if written {
-                self.deliver(session.take, reason: reason)
+                self.deliver(session.take, reason: reason, displayID: session.region.displayID)
             } else {
                 RecorderTakeStore.shared.delete(session.take)
                 QuickToolHUD.show(icon: "record.circle", message: self.strings.recordFailed)
@@ -701,14 +726,94 @@ final class ScreenRecorderService: ObservableObject {
 
     // MARK: - Output
 
-    /// A finished recording either opens in the editor, which is where trim,
-    /// sound and format are decided, or goes straight to a file for whoever
-    /// only wanted the raw recording.
-    private func deliver(_ take: RecorderTakeStore.Take, reason: String?) {
-        if reason == nil, UserDefaults.standard.bool(forKey: DefaultsKey.recorderOpenEditor) {
-            if openEditor(with: take) { return }
+    /// A finished recording waits in the corner as a thumbnail, the way the
+    /// system recorder's does, opens in the editor, where trim, sound and
+    /// format are decided, or goes straight to a file. A recording cut short
+    /// by a nearly full disk is kept exactly as captured: writing it out
+    /// again would need room the disk does not have.
+    private func deliver(_ take: RecorderTakeStore.Take, reason: String?,
+                         displayID: CGDirectDisplayID) {
+        let defaults = UserDefaults.standard
+        if reason == nil, AppFeature.screenRecorder.isAvailable {
+            if defaults.bool(forKey: DefaultsKey.recorderFloatingThumbnail),
+               let thumbnail = RecorderThumbnailController(take: take, displayID: displayID) {
+                thumbnail.onFinish = { [weak self] finished in
+                    self?.thumbnails.removeAll { $0 === finished }
+                }
+                thumbnails.append(thumbnail)
+                thumbnail.show()
+                return
+            }
+            if defaults.bool(forKey: DefaultsKey.recorderOpenEditor), openEditor(with: take) { return }
+            saveAsRecorded(take, export: nil, reveal: false) {}
+            return
         }
         saveDirect(take, reason: reason)
+    }
+
+    /// Saves the recording as it was recorded, pointer included, into the
+    /// chosen folder under its dated name, copies the file and reports where
+    /// it went. An export that fails keeps the recording in the editor rather
+    /// than losing it.
+    func saveAsRecorded(_ take: RecorderTakeStore.Take,
+                        export existing: RecorderQuickExport?,
+                        reveal: Bool,
+                        alwaysCopies: Bool = false,
+                        completion: @escaping () -> Void) {
+        guard let export = existing ?? RecorderQuickExport(take: take, strings: strings) else {
+            saveDirect(take, reason: nil)
+            completion()
+            return
+        }
+        savingExports[take.id] = export
+        export.start()
+        export.whenDone { [weak self] url in
+            guard let self else { return }
+            // Already saved while the app was quitting.
+            guard self.savingExports.removeValue(forKey: take.id) != nil else { return }
+            defer { completion() }
+            guard let url else {
+                export.removeFile()
+                NSSound.beep()
+                QuickToolHUD.show(icon: "record.circle", message: self.strings.exportFailed)
+                if !self.openEditor(with: take) { self.saveDirect(take, reason: nil) }
+                return
+            }
+            let destination = Self.saveDestination(strings: self.strings, fileExtension: "mp4")
+            let manager = FileManager.default
+            do {
+                do {
+                    try manager.moveItem(at: url, to: destination)
+                } catch {
+                    try manager.copyItem(at: url, to: destination)
+                }
+            } catch {
+                NSSound.beep()
+                QuickToolHUD.show(icon: "record.circle", message: self.strings.exportFailed)
+                export.removeFile()
+                if !self.openEditor(with: take) { self.saveDirect(take, reason: nil) }
+                return
+            }
+            export.removeFile()
+            RecorderTakeStore.shared.delete(take)
+            self.announceSaved(destination, reason: nil, alwaysCopies: alwaysCopies)
+            if reveal { NSWorkspace.shared.activateFileViewerSelecting([destination]) }
+        }
+        sweepTakes()
+    }
+
+    /// The app is quitting: whatever can be kept is kept now, without
+    /// waiting on an export.
+    func saveSynchronously(_ take: RecorderTakeStore.Take, export: RecorderQuickExport) {
+        let destination = Self.saveDestination(strings: strings,
+                                               fileExtension: export.state == .finished ? "mp4" : "mov")
+        if export.state == .finished,
+           (try? FileManager.default.moveItem(at: export.fileURL, to: destination)) != nil {
+            RecorderTakeStore.shared.delete(take)
+            return
+        }
+        export.cancel()
+        try? RecorderTakeStore.shared.saveDirectly(take, to: destination)
     }
 
     private func saveDirect(_ take: RecorderTakeStore.Take, reason: String?) {
@@ -721,10 +826,21 @@ final class ScreenRecorderService: ObservableObject {
             openEditor(with: take)
             return
         }
+        announceSaved(destination, reason: reason)
+    }
+
+    /// Every saved recording lands in the recent captures and, unless that
+    /// was turned off, on the clipboard as a file.
+    private func announceSaved(_ destination: URL, reason: String?, alwaysCopies: Bool = false) {
         RecentCaptureService.shared.recordRecording(at: destination)
+        let copied = alwaysCopies
+            ? CaptureClipboard.copyFile(destination)
+            : CaptureClipboard.copyIfWanted(destination)
         let folder = destination.deletingLastPathComponent().lastPathComponent
-        QuickToolHUD.show(icon: "record.circle",
-                          message: reason ?? String(format: strings.savedHUDFormat, folder))
+        let format = copied
+            ? FeatureStrings.screenshot(L10n.shared.language).savedAndCopiedHUDFormat
+            : strings.savedHUDFormat
+        QuickToolHUD.show(icon: "record.circle", message: reason ?? String(format: format, folder))
     }
 
     /// The configured folder when it still exists, otherwise the Desktop, with
@@ -746,9 +862,10 @@ final class ScreenRecorderService: ObservableObject {
         let destination = folder
             ?? manager.urls(for: .desktopDirectory, in: .userDomainMask).first
             ?? manager.homeDirectoryForCurrentUser
-        let name = ScreenshotSupport.fileName(prefix: strings.fileNamePrefix,
-                                              date: Date(),
-                                              fileExtension: fileExtension)
+        let name = RecorderSupport.recordingFileName(prefix: strings.fileNamePrefix,
+                                                     date: Date(),
+                                                     uses12HourClock: RecorderSupport.systemUses12HourClock,
+                                                     fileExtension: fileExtension)
         let unique = ScreenshotSupport.uniqueFileName(name) { candidate in
             manager.fileExists(atPath: destination.appendingPathComponent(candidate).path)
         }
@@ -784,6 +901,8 @@ final class ScreenRecorderService: ObservableObject {
         // a value: a recording with a window on screen is never swept.
         var owned = Set(editors.map(\.takeID))
         if let session { owned.insert(session.take.id) }
+        owned.formUnion(thumbnails.map(\.take.id))
+        owned.formUnion(savingExports.keys)
         DispatchQueue.global(qos: .utility).async {
             RecorderTakeStore.shared.sweep(keeping: owned)
         }

@@ -2135,7 +2135,9 @@ def main():
           + "func close() { closed = true }\nfunc attach(_ panel: NSPanel) { installKeyMonitor(for: panel) }\n"
           + declaration(preview, "    private func installKeyMonitor(for panel:")
           + "}\nfinal class Selection {\n"
-          + "final class Options { var controlsInNotch = true; var hasFocusedControl = false }\n"
+          + "final class Options { var controlsInNotch = true; var hasFocusedControl = false; var showsOptions = false }\n"
+          + "var captureTarget = ScreenCaptureTarget.portion\n"
+          + 'func confirmFromToolbar() -> Bool { actions.append("toolbar"); return true }\n'
           + "enum Outcome { case cancelled }\nvar screenCaptureOptions: Options? = Options()\n"
           + "var keyMonitor: Any?\nvar globalKeyMonitor: Any?\nvar spaceIsDown = false\n"
           + "var acceptsWindowClick = true\nvar loupeAcceptsKeyboardActions = false\n"
@@ -2702,6 +2704,7 @@ def main():
           + "final class Window { var closes = 0; func close() { closes += 1 } }\nvar window: Window? = Window()\n"
           + "let strings = FeatureStrings.recorder(.enUS)\nvar saved: (RecorderExporter.Output, URL)? { model.request }\nvar copied: (RecorderSupport.ExportFormat, Bool)?\n"
           + "enum NSSound { static func beep() {} }\nenum QuickToolHUD { static func show(icon: String, message: String) {} }\n"
+          + "enum CaptureClipboard { static var copied: [URL] = []; static func copyIfWanted(_ url: URL) -> Bool { copied.append(url); return true } }\n"
           + "enum ScreenRecorderService { static func saveDestination(strings: RecorderFeatureStrings, fileExtension: String) -> URL { URL(fileURLWithPath: \"/tmp/recording.\" + fileExtension) } }\n"
           + "struct RecentCaptureService { static let shared = RecentCaptureService(); func recordRecording(at url: URL) {} }\n"
           + "struct RecorderGIFClipboard { static var publications = 0; static func publish(fileURL: URL) -> Bool { publications += 1; return true } }\n"

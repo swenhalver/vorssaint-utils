@@ -2,36 +2,76 @@
 // Copyright (C) 2026 Vorssaint
 
 import AppKit
+import Carbon.HIToolbox
 import QuartzCore
 
-/// The small pill that shows recording time and keeps pause and stop reachable.
+/// The small pill that shows recording time and keeps pause and stop reachable,
+/// plus the two stop controls the system recorder has: a stop button in the
+/// menu bar and Control-Command-Escape.
 ///
 /// It floats instead of living in the menu bar on purpose: a menu bar that is
 /// full drops the items that do not fit, and the one control that ends a
 /// recording can never be the one that disappears. It is one of this app's own
 /// windows, so the capture filter excludes it and it never shows up inside the
 /// video.
-final class RecorderIndicator {
+final class RecorderIndicator: NSObject {
 
     private var panel: NSPanel?
     private var pill: PillView?
     private var regionGuide: NSPanel?
+    private var statusItem: NSStatusItem?
     private let onPause: () -> Void
     private let onStop: () -> Void
+    /// Stops a recording, or calls off one still counting down.
+    private let onCancel: () -> Void
+    private let stopHotkey = QuickToolHotkey(id: 90)
+    private var escapeMonitors: [Any] = []
+
+    /// The system recorder's own stop combination. It is only held while
+    /// this indicator exists, so the key is free the rest of the time.
+    static let stopShortcut = GlobalShortcut(keyCode: Int64(kVK_Escape), modifiers: [.control, .command])
 
     /// The window the capture has to leave out. Everything else this app puts
     /// on screen, the panel, the settings, the command bar, belongs in the
     /// recording: showing the app itself is a thing people record.
     var excludedWindowNumbers: [Int] {
-        [panel?.windowNumber, regionGuide?.windowNumber].compactMap { number in
+        [panel?.windowNumber, regionGuide?.windowNumber,
+         statusItem?.button?.window?.windowNumber].compactMap { number in
             guard let number, number > 0 else { return nil }
             return number
         }
     }
 
-    init(onPause: @escaping () -> Void, onStop: @escaping () -> Void) {
+    init(onPause: @escaping () -> Void, onStop: @escaping () -> Void,
+         onCancel: (() -> Void)? = nil) {
         self.onPause = onPause
         self.onStop = onStop
+        self.onCancel = onCancel ?? onStop
+        super.init()
+        stopHotkey.onPress = { [weak self] in self?.onCancel() }
+        stopHotkey.sync(enabled: true, shortcut: Self.stopShortcut,
+                        storageKey: "recorderStopShortcutWhileRecording")
+    }
+
+    /// Escape calls off a countdown, as it does on macOS. Once recording,
+    /// Escape belongs to the apps being recorded again.
+    func setCountdownCancelsOnEscape(_ active: Bool) {
+        escapeMonitors.forEach(NSEvent.removeMonitor)
+        escapeMonitors = []
+        guard active else { return }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
+            guard event.keyCode == UInt16(kVK_Escape) else { return }
+            self?.onCancel()
+        }) {
+            escapeMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
+            guard event.keyCode == UInt16(kVK_Escape), let self else { return event }
+            self.onCancel()
+            return nil
+        }) {
+            escapeMonitors.append(local)
+        }
     }
 
     /// Keeps the chosen area visible without trapping clicks. The panel is
@@ -112,7 +152,27 @@ final class RecorderIndicator {
 
         self.panel = panel
         self.pill = pill
+        showStatusItem(stopTooltip: stopTooltip)
     }
+
+    /// The menu bar's stop button, as the system recorder puts there. The
+    /// floating pill stays too: a crowded menu bar can hide this one.
+    private func showStatusItem(stopTooltip: String) {
+        guard statusItem == nil else { return }
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = item.button {
+            button.image = NSImage(systemSymbolName: "stop.circle",
+                                   accessibilityDescription: stopTooltip)?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 15, weight: .regular))
+            button.image?.isTemplate = true
+            button.toolTip = "\(stopTooltip) (⌃⌘⎋)"
+            button.target = self
+            button.action = #selector(statusItemPressed)
+        }
+        statusItem = item
+    }
+
+    @objc private func statusItemPressed() { onStop() }
 
     func update(elapsed: String) {
         pill?.setTime(elapsed)
@@ -123,6 +183,12 @@ final class RecorderIndicator {
     }
 
     func hide() {
+        setCountdownCancelsOnEscape(false)
+        stopHotkey.unregister()
+        if let statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
+        }
         regionGuide?.orderOut(nil)
         regionGuide = nil
         guard let panel else { return }

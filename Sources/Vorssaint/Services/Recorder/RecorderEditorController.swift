@@ -1711,8 +1711,10 @@ final class RecorderEditorController: NSObject, NSWindowDelegate {
                 try? manager.removeItem(at: file)
             }
         }
-        let name = ScreenshotSupport.fileName(prefix: strings.fileNamePrefix,
-                                              date: Date(), fileExtension: fileExtension)
+        let name = RecorderSupport.recordingFileName(prefix: strings.fileNamePrefix,
+                                                     date: Date(),
+                                                     uses12HourClock: RecorderSupport.systemUses12HourClock,
+                                                     fileExtension: fileExtension)
         let unique = ScreenshotSupport.uniqueFileName(name) { candidate in
             manager.fileExists(atPath: folder.appendingPathComponent(candidate).path)
         }
@@ -1735,9 +1737,15 @@ final class RecorderEditorController: NSObject, NSWindowDelegate {
                 if let onSuccess {
                     onSuccess(destination)
                 } else {
+                    // A saved recording is copied as a file too, like every
+                    // finished capture.
+                    let copied = CaptureClipboard.copyIfWanted(destination)
+                    let format = copied
+                        ? FeatureStrings.screenshot(L10n.shared.language).savedAndCopiedHUDFormat
+                        : self.strings.savedHUDFormat
                     QuickToolHUD.show(
                         icon: "record.circle",
-                        message: String(format: self.strings.savedHUDFormat,
+                        message: String(format: format,
                                         destination.deletingLastPathComponent().lastPathComponent))
                 }
             case .cancelled:

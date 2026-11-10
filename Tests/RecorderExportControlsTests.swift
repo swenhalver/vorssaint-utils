@@ -72,6 +72,8 @@ enum RecorderExportControlsTests {
         successfulSave.model.completion?(nil)
         suite.expect(successfulSave.exported,
                      "successful save still marks a recording safely exported")
+        suite.expect(RecorderExportActionFixture.CaptureClipboard.copied.last == successfulSave.saved?.1,
+                     "a saved recording also goes on the clipboard as its file")
         let lane = RecorderExportActionFixture.GeneralPasteboardAccess.shared
         let cancelledCopy = RecorderExportActionFixture()
         cancelledCopy.startGIFCopy(true)
