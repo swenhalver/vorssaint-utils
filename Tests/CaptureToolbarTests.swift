@@ -177,6 +177,28 @@ enum CaptureToolbarTests {
                      && ScreenshotSupport.selectionHandleRadius >= 4,
                      "the editable area is outlined with dashes and grabbable round handles")
 
+        // MARK: Capture hotspot
+
+        let notched = ScreenshotSupport.HotspotDisplay(id: 1, frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+                                                       auxLeftWidth: 662, auxRightWidth: 662)
+        let external = ScreenshotSupport.HotspotDisplay(id: 2, frame: CGRect(x: 1512, y: 0, width: 2000, height: 1000),
+                                                        auxLeftWidth: nil, auxRightWidth: nil)
+        let regions = ScreenshotSupport.captureHotspotRegions(for: [notched, external])
+        suite.expect(regions.count == 2
+                     && regions[0].rect == CGRect(x: 662, y: 977, width: 188, height: 5)
+                     && regions[1].rect == CGRect(x: 2512 - 94, y: 995, width: 188, height: 5),
+                     "the hotspot is the notch, and a notch-wide strip at the top center of other displays")
+        suite.expect(ScreenshotSupport.captureHotspotDisplay(containing: CGPoint(x: 700, y: 982), in: regions) == 1
+                     && ScreenshotSupport.captureHotspotDisplay(containing: CGPoint(x: 2512, y: 996), in: regions) == 2
+                     && ScreenshotSupport.captureHotspotDisplay(containing: CGPoint(x: 700, y: 970), in: regions) == nil
+                     && ScreenshotSupport.captureHotspotDisplay(containing: CGPoint(x: 100, y: 982), in: regions) == nil,
+                     "only the top five points of the strip count, top edge included")
+        let unnotched = ScreenshotSupport.captureHotspotRegions(for: [external])
+        suite.expect(unnotched.first?.rect.width == ScreenshotSupport.captureHotspotFallbackWidth,
+                     "without any notch the strip has a fixed width")
+        suite.expect(Defaults.registeredDefaults[DefaultsKey.captureHotspotEnabled] as? Bool == false,
+                     "the hotspot ships off")
+
         // MARK: Clipboard only
 
         let clipboardPath = RecorderSupport.clipboardOnlyFolder.path

@@ -133,6 +133,8 @@ final class ScreenCaptureService: ObservableObject {
 
     func syncWithPreferences() {
         let availableTools = ScreenCaptureTool.available()
+        CaptureHotspot.shared.sync(enabled: !availableTools.isEmpty
+            && UserDefaults.standard.bool(forKey: DefaultsKey.captureHotspotEnabled))
         guard !availableTools.isEmpty else {
             toolShortcutRegistrationFailures = []
             toolHotkeys.values.forEach { $0.unregister() }
@@ -165,6 +167,7 @@ final class ScreenCaptureService: ObservableObject {
     }
 
     func suspend() {
+        CaptureHotspot.shared.sync(enabled: false)
         toolHotkeys.values.forEach { $0.unregister() }
         cancelSelection()
     }
@@ -173,6 +176,7 @@ final class ScreenCaptureService: ObservableObject {
     /// button merely picks the initial mode; the person can switch before
     /// selecting anything.
     func capture(initial preferred: ScreenCaptureTool? = nil, fromShortcut: Bool = false) {
+        CaptureTiming.mark("capture(initial:)")
         let recorder = ScreenRecorderService.shared
         if preferred == .recording, AppFeature.screenRecorder.isAvailable,
            recorder.stopOrCancelActiveCapture() {
@@ -186,7 +190,14 @@ final class ScreenCaptureService: ObservableObject {
             cancelSelection()
             return
         }
-        guard selection == nil, !ScreenshotSelectionController.isSessionOnScreen else { return }
+        if selection != nil {
+            // Pressed again, by the shortcut or a hotspot that sends it, the
+            // surface closes. Not while a button is held: an area dragged up
+            // into a hotspot must not cancel itself.
+            if NSEvent.pressedMouseButtons == 0 { cancelSelection() }
+            return
+        }
+        guard !ScreenshotSelectionController.isSessionOnScreen else { return }
 
         let available = ScreenCaptureTool.available()
         guard !available.isEmpty else { return }
@@ -256,6 +267,7 @@ final class ScreenCaptureService: ObservableObject {
     }
 
     private func startSelection(options: ScreenCaptureSelectionOptions) {
+        CaptureTiming.mark("startSelection")
         guard selection == nil, !ScreenshotSelectionController.isSessionOnScreen,
               self.options === options else { return }
         let defaults = UserDefaults.standard

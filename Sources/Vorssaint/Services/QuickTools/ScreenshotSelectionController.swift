@@ -305,6 +305,7 @@ final class ScreenshotSelectionController {
     }
 
     private func present(frozenImages: [CGDirectDisplayID: CGImage]) {
+        CaptureTiming.mark("present")
         guard !finished else { return }
         let pickable = ScreenshotCaptureEngine.pickableWindows(
             hideVorssaintWindows: hideVorssaintWindows,
@@ -357,8 +358,10 @@ final class ScreenshotSelectionController {
         // resigning a full-screen key panel can flash the surrounding chrome.
         screenCaptureOptions?.onPresentationReady?()
         guard !finished else { return }
+        CaptureTiming.mark("panels built")
         panels.forEach { $0.orderFrontRegardless() }
         if screenCaptureOptions?.controlsInNotch != true { keyPanelUnderMouse()?.makeKey() }
+        CaptureTiming.mark("ordered front")
         if isPickingColor
             || UserDefaults.standard.bool(forKey: DefaultsKey.screenshotLoupeStartsOn) {
             // Opt-in: the session opens with the magnifier already up,

@@ -274,6 +274,54 @@ enum ScreenshotSupport {
         isAvailable(selected.feature)
     }
 
+    // MARK: - Capture hotspot
+
+    /// A display as the capture hotspot sees it, in AppKit global coordinates.
+    struct HotspotDisplay: Equatable {
+        var id: UInt32
+        var frame: CGRect
+        /// Widths of the areas left and right of the notch; nil without one.
+        var auxLeftWidth: CGFloat?
+        var auxRightWidth: CGFloat?
+    }
+
+    static let captureHotspotHeight: CGFloat = 5
+    static let captureHotspotFallbackWidth: CGFloat = 220
+
+    static func notchSpan(of display: HotspotDisplay) -> ClosedRange<CGFloat>? {
+        guard let left = display.auxLeftWidth, let right = display.auxRightWidth else { return nil }
+        let minX = display.frame.minX + left, maxX = display.frame.maxX - right
+        return maxX > minX ? minX...maxX : nil
+    }
+
+    /// One strip per display along its top edge: the notch itself where there
+    /// is one, elsewhere a centered strip as wide as the first notch found.
+    static func captureHotspotRegions(for displays: [HotspotDisplay]) -> [(id: UInt32, rect: CGRect)] {
+        let notchWidth = displays.lazy.compactMap(notchSpan(of:)).first
+            .map { $0.upperBound - $0.lowerBound } ?? captureHotspotFallbackWidth
+        return displays.map { display in
+            let frame = display.frame
+            let height = min(captureHotspotHeight, frame.height)
+            let span = notchSpan(of: display) ?? {
+                let width = min(notchWidth, frame.width)
+                return (frame.midX - width / 2)...(frame.midX + width / 2)
+            }()
+            return (display.id, CGRect(x: span.lowerBound, y: frame.maxY - height,
+                                       width: span.upperBound - span.lowerBound, height: height))
+        }
+    }
+
+    /// The display whose strip holds `point`. The top edge counts: AppKit
+    /// reports a screen's top pixel row as y == frame.maxY.
+    static func captureHotspotDisplay(containing point: CGPoint,
+                                      in regions: [(id: UInt32, rect: CGRect)]) -> UInt32? {
+        regions.first { region in
+            let fromTop = region.rect.maxY - point.y
+            return point.x >= region.rect.minX && point.x < region.rect.maxX
+                && fromTop >= 0 && fromTop < region.rect.height
+        }?.id
+    }
+
     // MARK: - Capture toolbar placement
 
     static let captureToolbarMargin: CGFloat = 8

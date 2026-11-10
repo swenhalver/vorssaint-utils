@@ -699,6 +699,7 @@ enum DefaultsKey {
     static let screenshotShowLastRegion = "screenshotShowLastRegion"
     static let screenshotSmartAreas = "screenshotSmartAreas" // highlight the part of a window under the pointer
     static let screenshotAdjustSelection = "screenshotAdjustSelection" // open on the last area and wait for a button to capture
+    static let captureHotspotEnabled = "captureHotspotEnabled" // the top-center strip of every display opens and closes capture
     static let screenshotLastRegion = "screenshotLastRegion" // "displayID x y width height" of the last captured area
     static let screenshotHighlightWindows = "screenshotHighlightWindows"
     static let screenshotLoupeStartsOn = "screenshotLoupeStartsOn"
@@ -1955,6 +1956,7 @@ enum Defaults {
         DefaultsKey.screenshotShowLastRegion: true,
         DefaultsKey.screenshotAdjustSelection: false,
         DefaultsKey.screenshotSmartAreas: false,
+        DefaultsKey.captureHotspotEnabled: false,
         DefaultsKey.screenshotHighlightWindows: true,
         DefaultsKey.screenshotLoupeStartsOn: false,
         DefaultsKey.screenshotLoupeRememberZoom: false,
