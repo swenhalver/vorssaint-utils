@@ -13,8 +13,13 @@ struct CaptureToolbarView: View {
     @ObservedObject var options: ScreenCaptureSelectionOptions
     @ObservedObject private var l10n = L10n.shared
     @State private var hovered: String?
+    @Environment(\.colorScheme) private var colorScheme
 
     private var strings: CaptureToolbarStrings { FeatureStrings.captureToolbar(l10n.language) }
+
+    /// In dark mode the bar is the system toolbar's near black with no
+    /// outline (measured from Command-Shift-5); light mode keeps the material.
+    private var matchesSystemDarkBar: Bool { colorScheme == .dark }
 
     var body: some View {
         HStack(spacing: 2) {
@@ -49,12 +54,20 @@ struct CaptureToolbarView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(CaptureChromeBackdrop(
-            material: .regularMaterial,
-            shape: RoundedRectangle(cornerRadius: 14, style: .continuous)))
+        .background {
+            if matchesSystemDarkBar {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(.sRGB, red: 0x0C / 255.0, green: 0x0F / 255.0, blue: 0x11 / 255.0))
+            } else {
+                CaptureChromeBackdrop(material: .regularMaterial,
+                                      shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            if !matchesSystemDarkBar {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            }
         }
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         // Window coordinates: the panel never moves, so the translation stays
