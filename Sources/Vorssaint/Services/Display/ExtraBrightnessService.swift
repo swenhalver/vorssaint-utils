@@ -591,8 +591,7 @@ private final class GammaBoost {
     static let maximumScale: Float = 1.6
 
     let displayID: CGDirectDisplayID
-    private var baseline: [[CGGammaValue]]
-    private var lastWritten: [[CGGammaValue]]?
+    private let baseline: [[CGGammaValue]]
 
     init?(displayID: CGDirectDisplayID) {
         guard let curve = Self.read(displayID) else { return nil }
@@ -601,23 +600,18 @@ private final class GammaBoost {
     }
 
     /// Rewritten every tick, unchanged or not: macOS replaces the curve when
-    /// a colour profile or another app's capture resets the display.
+    /// a colour profile or another app's capture resets the display. Always
+    /// scaled from the curve read before the first write: what reads back
+    /// afterwards is not reliably what was written, and taking it as the new
+    /// normal compounded the scale every tick until the screen went white.
     func apply(factor: Double) {
-        // Someone else replaced the curve (a new colour profile): that is the
-        // new normal to scale from. Ours or the untouched one read back as
-        // either of the two known curves.
-        if let live = Self.read(displayID), !Self.matches(live, baseline),
-           !(lastWritten.map { Self.matches(live, $0) } ?? false) {
-            baseline = live
-        }
         let scale = min(max(Float(factor), 1), Self.maximumScale)
         let curve = scale <= 1.0001 ? baseline : baseline.map { $0.map { $0 * scale } }
-        guard write(curve) else { return }
-        lastWritten = curve
+        _ = write(curve)
     }
 
     func restore() {
-        if write(baseline) { lastWritten = nil }
+        _ = write(baseline)
     }
 
     private func write(_ curve: [[CGGammaValue]]) -> Bool {
@@ -636,12 +630,4 @@ private final class GammaBoost {
         return [Array(red.prefix(samples)), Array(green.prefix(samples)), Array(blue.prefix(samples))]
     }
 
-    private static func matches(_ a: [[CGGammaValue]], _ b: [[CGGammaValue]]) -> Bool {
-        guard a.count == b.count else { return false }
-        for (x, y) in zip(a, b) {
-            guard x.count == y.count else { return false }
-            for (u, v) in zip(x, y) where abs(u - v) > 0.002 { return false }
-        }
-        return true
-    }
 }
