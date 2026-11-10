@@ -208,6 +208,7 @@ final class NotchService: ObservableObject {
     private var inside = false
     private var hoverEmphasized = false
     private var activitySelection = NotchActivitySelection()
+    private var hiddenActivities = NotchHiddenActivities()
     private var activityPickerMenuOpen = false
     private var hoverState = NotchHoverState()
     private var openedByHover = false
@@ -552,6 +553,11 @@ final class NotchService: ObservableObject {
     }
 
     var compactActivities: [NotchCompactActivity] {
+        hiddenActivities.visible(liveCompactActivities)
+    }
+
+    /// Every live activity, hidden or not.
+    private var liveCompactActivities: [NotchCompactActivity] {
         NotchSupport.compactActivities(timer: hasTimerActivity, watch: hasWatchActivity, downloads: hasDownloadActivity,
                                       agents: hasAgentActivity, calendar: hasCalendarActivity,
                                       music: hasMusicActivity, keepAwake: hasKeepAwakeActivity)
@@ -566,16 +572,17 @@ final class NotchService: ObservableObject {
     var compactActivityPickerLayout: NotchActivityPickerLayout {
         let activities = compactActivities
         let font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        let labelWidth = activities.map {
-            ($0.title(L10n.shared.language) as NSString).size(withAttributes: [.font: font]).width
-        }.max() ?? 0
+        let language = L10n.shared.language
+        let labelWidth = (activities.map { $0.title(language) } + [FeatureStrings.notch(language).hideActivities])
+            .map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
         let combinations = compactActivityCombinations
         let sizes = activities.map { compactStripSize(for: $0) }
             + combinations.map { compactStripSize(for: $0.primary, companion: $0.companion) }
         // Switching the chosen strip must not move the buttons under the pointer.
         let strip = CGSize(width: sizes.map(\.width).max() ?? geometry.cameraWidth,
                            height: sizes.map(\.height).max() ?? geometry.stripHeight)
-        return NotchActivityPickerLayout(count: activities.count, labelWidth: labelWidth,
+        // The last choice is Hide.
+        return NotchActivityPickerLayout(count: activities.count + 1, labelWidth: labelWidth,
                                          stripSize: strip, screenWidth: geometry.screen.width,
                                          hasCombinations: !combinations.isEmpty)
     }
@@ -600,6 +607,16 @@ final class NotchService: ObservableObject {
         }
         // A song chosen away is not music disappearing, which the host would
         // fade out through the whole picker as another activity takes its place.
+        presentedMusic = nil
+        refreshPresentation()
+    }
+
+    /// The picker's Hide: the closed island stops showing every activity
+    /// it offers, which keep running. See `NotchHiddenActivities`.
+    func hideCompactActivities() {
+        hoverWork?.cancel(); hoverWork = nil
+        hiddenActivities.hide(compactActivities)
+        activityPickerMenuOpen = false
         presentedMusic = nil
         refreshPresentation()
     }
@@ -1356,6 +1373,7 @@ final class NotchService: ObservableObject {
         endMusicStripRequest()
         hoverEmphasized = false
         activitySelection = NotchActivitySelection()
+        hiddenActivities = NotchHiddenActivities()
         activityPickerMenuOpen = false
         hoverState = NotchHoverState()
         openedByHover = false
@@ -2654,6 +2672,7 @@ final class NotchService: ObservableObject {
         defer { if releasedMusicStrip { syncMenuSpaceMonitoring() } }
         syncMascotKeepAwake()
         syncMascotAgents()
+        hiddenActivities.reconcile(live: liveCompactActivities)
         activitySelection.reconcile(available: compactActivities)
         if fullscreenCompact {
             finishMusicDeparture()

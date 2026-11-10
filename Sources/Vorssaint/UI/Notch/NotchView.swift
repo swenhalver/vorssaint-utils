@@ -190,7 +190,8 @@ struct NotchView: View {
                                             NotchActivityCombination(primary: activity, companion: $0)
                                         },
                                         columns: layout.columns, language: l10n.language,
-                                        select: service.selectCompactActivity, combine: service.selectCompactCombination)
+                                        select: service.selectCompactActivity, combine: service.selectCompactCombination,
+                                        hide: service.hideCompactActivities)
                         .padding(.horizontal, NotchActivityPickerLayout.horizontalInset)
                         .padding(.vertical, NotchActivityPickerLayout.verticalInset)
                 }
@@ -876,6 +877,7 @@ struct NotchActivityPicker: View {
     let language: AppLanguage
     let select: (NotchCompactActivity) -> Void
     let combine: (NotchActivityCombination) -> Void
+    let hide: () -> Void
 
     var body: some View {
         VStack(spacing: NotchActivityPickerLayout.spacing) {
@@ -902,37 +904,47 @@ struct NotchActivityPicker: View {
         }
     }
 
+    private func choiceLabel(symbol: String, title: String, chosen: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+            Text(title).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .font(.system(size: 12, weight: .medium))
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity)
+        .frame(height: NotchActivityPickerLayout.rowHeight)
+        .foregroundStyle(chosen ? Color.black : Color.white)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.12))
+                if chosen {
+                    RoundedRectangle(cornerRadius: 8).fill(Color.white)
+                        .matchedGeometryEffect(id: "choice", in: choice)
+                }
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+    }
+
     private var individualChoices: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: NotchActivityPickerLayout.spacing),
                                  count: columns), spacing: NotchActivityPickerLayout.spacing) {
             ForEach(activities) { activity in
                 let chosen = activity == selected && combination == nil
                 Button { select(activity) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: activity.symbol)
-                        Text(activity.title(language)).lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                    .font(.system(size: 12, weight: .medium))
-                    .padding(.horizontal, 10)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: NotchActivityPickerLayout.rowHeight)
-                    .foregroundStyle(chosen ? Color.black : Color.white)
-                    .background {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.12))
-                            if chosen {
-                                RoundedRectangle(cornerRadius: 8).fill(Color.white)
-                                    .matchedGeometryEffect(id: "choice", in: choice)
-                            }
-                        }
-                    }
-                    .contentShape(RoundedRectangle(cornerRadius: 8))
+                    choiceLabel(symbol: activity.symbol, title: activity.title(language), chosen: chosen)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(activity.title(language))
                 .accessibilityAddTraits(chosen ? .isSelected : [])
                 .accessibilityIdentifier("notch.activity.\(activity.rawValue)")
             }
+            Button(action: hide) {
+                choiceLabel(symbol: "eye.slash", title: FeatureStrings.notch(language).hideActivities, chosen: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(FeatureStrings.notch(language).hideActivities)
+            .accessibilityIdentifier("notch.activity.hide")
         }
     }
 }

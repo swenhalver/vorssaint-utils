@@ -1455,10 +1455,12 @@ def main():
           + declaration(notch, "    func toggleMusicStripSong(")
               .replace("    func toggleMusicStripSong", "    @discardableResult\n    func toggleMusicStripSong", 1)
           + "}\n}\n")
-    music_visibility = "".join(declaration(notch, prefix).replace("    private ", "    ", 1) for prefix in [
+    music_visibility = "var hiddenActivities = NotchHiddenActivities()\n" + "".join(
+        declaration(notch, prefix).replace("    private ", "    ", 1) for prefix in [
         "    private var hiddenUntilHover:", "    var fullscreenCompact:", "    var idleContent:", "    var hasMusicActivity:",
         "    private func musicStripHolds(", "    var compactActivity:",
         "    var compactActivityGeometry:", "    private func compactGeometry(", "    var compactActivities:",
+        "    private var liveCompactActivities:",
         "    var compactCompanion:",
         "    var surfaceSize:", "    var surfaceShift:", "    func collapse(",
         "    private func detachCaptureIfClosingOnCollapse(", "    func endCaptureControls(",
@@ -1584,6 +1586,7 @@ def main():
           + declaration(notch, "    private func switchCompactSelection(").replace("private func", "func", 1)
           + declaration(notch, "    func refreshPresentation(")
               .replace("NotchSupport.coversMenus()", "UserDefaults.standard.coversMenus")
+              .replace("        hiddenActivities.reconcile(live: liveCompactActivities)\n", "")
           + declaration(notch, "    private func applyMenuSpace(").replace("private func", "func", 1)
           + declaration(notch, "    func presentCapture(")
               .replace("content: AnyView, actions: AnyView? = nil", "content: Bool, actions: Bool? = nil")

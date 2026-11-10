@@ -6,6 +6,7 @@ import Foundation
 struct NotchStrings {
     let title: String
     let combineActivities: String
+    let hideActivities: String
     let enable: String
     let description: String
     let menuBarAccessHint: String
@@ -124,6 +125,7 @@ extension NotchStrings {
     static let enUS = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Combine",
+        hideActivities: "Hide",
         enable: "Enable Dynamic Island",
         description: "Your music, controls and everyday tools, together at the top of your screen. Optional. Turn it off to keep using the separate panels.",
         menuBarAccessHint: "Allow Accessibility so Dynamic Island can appear on this display without covering the menus.",
@@ -219,6 +221,7 @@ extension NotchStrings {
     static let ptBR = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Combinar",
+        hideActivities: "Ocultar",
         enable: "Ativar Dynamic Island",
         description: "Sua música, controles e ferramentas do dia a dia, juntos no topo da tela. Opcional. Desative para continuar usando os painéis separados.",
         menuBarAccessHint: "Permita Acessibilidade para a Dynamic Island aparecer nesta tela sem cobrir os menus.",
@@ -314,6 +317,7 @@ extension NotchStrings {
     static let es = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Combinar",
+        hideActivities: "Ocultar",
         enable: "Activar Dynamic Island",
         description: "Tu música, controles y herramientas cotidianas, juntos en la parte superior de la pantalla. Opcional. Desactívalo para seguir usando los paneles por separado.",
         menuBarAccessHint: "Permite Accesibilidad para que Dynamic Island aparezca en esta pantalla sin cubrir los menús.",
@@ -409,6 +413,7 @@ extension NotchStrings {
     static let sk = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Kombinovať",
+        hideActivities: "Skryť",
         enable: "Zapnúť Dynamic Island",
         description: "Vaša hudba, ovládacie prvky a bežné nástroje na jednom mieste v hornej časti obrazovky. Voliteľné. Vypnutím budete naďalej používať samostatné panely.",
         menuBarAccessHint: "Povoľte Prístupnosť, aby sa Dynamic Island mohol zobraziť na tomto displeji bez prekrývania ponúk.",
@@ -504,6 +509,7 @@ extension NotchStrings {
     static let de = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Kombinieren",
+        hideActivities: "Ausblenden",
         enable: "Dynamic Island aktivieren",
         description: "Musik, Steuerelemente und alltägliche Werkzeuge am oberen Bildschirmrand. Optional. Deaktiviere die Funktion, um die separaten Bereiche weiter zu nutzen.",
         menuBarAccessHint: "Erlaube die Bedienungshilfen, damit Dynamic Island auf diesem Bildschirm erscheint, ohne die Menüs zu verdecken.",
@@ -599,6 +605,7 @@ extension NotchStrings {
     static let fr = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Combiner",
+        hideActivities: "Masquer",
         enable: "Activer Dynamic Island",
         description: "Votre musique, vos commandes et vos outils du quotidien, réunis en haut de l’écran. Facultatif. Désactivez cette option pour continuer à utiliser les panneaux séparés.",
         menuBarAccessHint: "Autorisez l’accessibilité pour afficher Dynamic Island sur cet écran sans masquer les menus.",
@@ -694,6 +701,7 @@ extension NotchStrings {
     static let it = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Combina",
+        hideActivities: "Nascondi",
         enable: "Attiva Dynamic Island",
         description: "Musica, controlli e strumenti quotidiani, insieme nella parte superiore dello schermo. Facoltativo. Disattiva questa opzione per continuare a usare i pannelli separati.",
         menuBarAccessHint: "Consenti Accessibilità per mostrare Dynamic Island su questo schermo senza coprire i menu.",
@@ -789,6 +797,7 @@ extension NotchStrings {
     static let ru = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Объединить",
+        hideActivities: "Скрыть",
         enable: "Включить Dynamic Island",
         description: "Музыка, управление и повседневные инструменты в верхней части экрана. Необязательно. Отключите, чтобы продолжить пользоваться отдельными панелями.",
         menuBarAccessHint: "Разрешите универсальный доступ, чтобы Dynamic Island отображалась на этом экране, не закрывая меню.",
@@ -884,6 +893,7 @@ extension NotchStrings {
     static let tr = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Birleştir",
+        hideActivities: "Gizle",
         enable: "Dynamic Island’u etkinleştir",
         description: "Müziğiniz, denetimleriniz ve günlük araçlarınız ekranın üst kısmında bir arada. İsteğe bağlıdır. Ayrı panelleri kullanmaya devam etmek için kapatın.",
         menuBarAccessHint: "Dynamic Island’ın bu ekranda menüleri kapatmadan görünmesi için Erişilebilirlik izni verin.",
@@ -979,6 +989,7 @@ extension NotchStrings {
     static let ja = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "組み合わせる",
+        hideActivities: "非表示",
         enable: "Dynamic Islandを有効にする",
         description: "音楽、コントロール、毎日のツールを画面上部にまとめます。 必要に応じて有効にできます。オフにすると、個別のパネルを引き続き使用できます。",
         menuBarAccessHint: "メニューを隠さずにこのディスプレイにDynamic Islandを表示するには、アクセシビリティを許可してください。",
@@ -1074,6 +1085,7 @@ extension NotchStrings {
     static let ko = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "함께 표시",
+        hideActivities: "숨기기",
         enable: "Dynamic Island 활성화",
         description: "음악, 제어 기능과 일상 도구를 화면 상단에 모아 보세요. 선택 기능입니다. 끄면 기존의 개별 패널을 계속 사용할 수 있습니다.",
         menuBarAccessHint: "이 디스플레이에서 메뉴를 가리지 않고 Dynamic Island를 표시하려면 손쉬운 사용을 허용하세요.",
@@ -1169,6 +1181,7 @@ extension NotchStrings {
     static let zhHans = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "组合显示",
+        hideActivities: "隐藏",
         enable: "启用Dynamic Island",
         description: "音乐、控制和日常工具，汇聚在屏幕顶部。 可选功能。关闭后可继续使用独立面板。",
         menuBarAccessHint: "请允许辅助功能权限，让 Dynamic Island 在此显示器上显示而不遮挡菜单。",
@@ -1264,6 +1277,7 @@ extension NotchStrings {
     static let zhTW = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "組合顯示",
+        hideActivities: "隱藏",
         enable: "啟用Dynamic Island",
         description: "音樂、控制項與日常工具，匯聚在螢幕頂端。 選用功能。關閉後可繼續使用獨立面板。",
         menuBarAccessHint: "請允許輔助使用權限，讓 Dynamic Island 在此顯示器上顯示而不遮擋選單。",
@@ -1359,6 +1373,7 @@ extension NotchStrings {
     static let zhHK = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "組合顯示",
+        hideActivities: "隱藏",
         enable: "啟用Dynamic Island",
         description: "音樂、控制項與日常工具，集中在螢幕頂端。 選用功能。關閉後可繼續使用獨立面板。",
         menuBarAccessHint: "請允許輔助使用權限，讓 Dynamic Island 在此顯示器上顯示而不遮擋選單。",
@@ -1454,6 +1469,7 @@ extension NotchStrings {
     static let uk = NotchStrings(
         title: "Dynamic Island",
         combineActivities: "Поєднати",
+        hideActivities: "Сховати",
         enable: "Увімкнути Dynamic Island",
         description: "Ваша музика, елементи керування та повсякденні інструменти, зібрані у верхній частині екрана. Необов’язково. Вимкніть, щоб і надалі користуватися окремими панелями.",
         menuBarAccessHint: "Надайте дозвіл «Доступність», щоб Dynamic Island з’являвся на цьому дисплеї, не затуляючи меню.",
