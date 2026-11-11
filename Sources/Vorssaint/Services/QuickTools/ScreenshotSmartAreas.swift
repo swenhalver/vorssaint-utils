@@ -20,6 +20,7 @@ enum ScreenshotSmartAreas {
         }
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.25)
+        requestPageTree(app, pid: pid)
         var hit: AXUIElement?
         guard AXUIElementCopyElementAtPosition(app, Float(point.x), Float(point.y), &hit) == .success,
               let hit else { return [windowFrame] }
@@ -43,6 +44,20 @@ enum ScreenshotSmartAreas {
     /// worth a picture on its own, not a lone icon or a line of text.
     static func defaultLevel(_ areas: [CGRect]) -> Int {
         areas.firstIndex { $0.width >= 40 && $0.height >= 24 } ?? max(0, areas.count - 1)
+    }
+
+    /// Apps already asked for their page tree. Only touched on `queue`.
+    private static var pageTreeRequested = Set<pid_t>()
+
+    /// Electron and Chromium apps (T3 Code, Slack, Chrome) show only one
+    /// window-sized scroll area until someone asks for their page's
+    /// accessibility tree; until then their sidebars and panes cannot be
+    /// told apart. Apps that do not know the attribute refuse it, unharmed.
+    private static func requestPageTree(_ app: AXUIElement, pid: pid_t) {
+        guard pageTreeRequested.insert(pid).inserted else { return }
+        let result = AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        // The tree is built on request; give the first lookup a moment.
+        if result == .success { usleep(250_000) }
     }
 
     private static func ownerPID(of windowID: CGWindowID) -> pid_t? {
