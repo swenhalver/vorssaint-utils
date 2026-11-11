@@ -3375,7 +3375,9 @@ final class CommandBarService: ObservableObject {
         panel.isReleasedWhenClosed = false
         panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = false
-        panel.level = .floating
+        // Above the notch island (status bar + 1) and the panels it opens
+        // (one level higher), so the bar is never covered by the notch.
+        panel.level = NSWindow.Level(rawValue: NotchPanel.normalLevel.rawValue + 2)
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
