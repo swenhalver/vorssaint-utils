@@ -37,7 +37,9 @@ final class RecorderIndicator: NSObject {
     var excludedWindowNumbers: [Int] {
         [panel?.windowNumber, regionGuide?.windowNumber,
          statusItem?.button?.window?.windowNumber].compactMap { number in
-            guard let number, number > 0 else { return nil }
+            // A menu bar item's window lives outside the app on recent macOS
+            // and reports 4294967296, which names no window here.
+            guard let number, number > 0, CGWindowID(exactly: number) != nil else { return nil }
             return number
         }
     }

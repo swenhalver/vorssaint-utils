@@ -192,7 +192,9 @@ final class RecorderCaptureEngine: NSObject {
         }
         guard let display = content.displays.first(where: { $0.displayID == region.displayID })
         else { return nil }
-        let excluded = Set(windowNumbers.map { CGWindowID($0) })
+        // A number outside the window server's range names no window, and
+        // converting it would trap.
+        let excluded = Set(windowNumbers.compactMap { CGWindowID(exactly: $0) })
         let ownPID = NSRunningApplication.current.processIdentifier
         let ownWindows = content.windows.filter { $0.owningApplication?.processID == ownPID }
         guard let ownApplication = content.applications.first(where: { $0.processID == ownPID })
