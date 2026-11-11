@@ -959,7 +959,7 @@ extension Strings {
         switcherUsageHintFormat: "Halte %@ zum Navigieren; loslassen, um das Fenster zu aktivieren. Umschalt oder ← geht zurück; W schließt das Fenster; Q beendet die App; Esc bricht ab.",
         musicBlockSection: "Medientasten",
         musicBlockTitle: "Musik nicht von selbst öffnen lassen",
-        musicBlockCaption: "Blockiert den Start der Musik-App nach einer erkannten Medientaste. Benötigt Bedienungshilfen. Kopfhörerbefehle ohne erkannte Taste werden zugelassen.",
+        musicBlockCaption: "Blockiert den Start der Musik-App durch Medientasten, Kopfhörer, AirPods oder das Kontrollzentrum. Benötigt Bedienungshilfen.",
         musicBlockUnavailable: "Dieser Schutz ist gerade nicht verfügbar. Schalte ihn aus und wieder ein, um es erneut zu versuchen.",
         musicBlockReplacementLabel: "Stattdessen öffnen",
         musicBlockReplacementNone: "Keine",

@@ -959,7 +959,7 @@ extension Strings {
         switcherUsageHintFormat: "Maintenez %@ pour naviguer\u{00A0}; relâchez pour activer la fenêtre. Maj ou ← revient en arrière\u{00A0}; W ferme la fenêtre\u{00A0}; Q quitte l’app\u{00A0}; Échap annule.",
         musicBlockSection: "Touches multimédias",
         musicBlockTitle: "Empêcher Musique de s’ouvrir toute seule",
-        musicBlockCaption: "Bloque l’ouverture de l’app de musique après une touche multimédia détectée. Nécessite l’accès à l’accessibilité. Les commandes du casque sans touche détectée sont autorisées.",
+        musicBlockCaption: "Bloque l’ouverture de l’app de musique par une touche multimédia, un casque, des AirPods ou le centre de contrôle. Nécessite l’accès à l’accessibilité.",
         musicBlockUnavailable: "Cette protection est indisponible pour le moment. Désactivez-la puis réactivez-la pour réessayer.",
         musicBlockReplacementLabel: "Ouvrir à la place",
         musicBlockReplacementNone: "Aucune",

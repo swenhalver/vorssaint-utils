@@ -13,7 +13,41 @@ import SwiftUI
 import VMStatisticsCompat
 
 enum ScreenshotFeatureTests {
+    private static func smartAreaPanes(_ suite: TestSuite) {
+        typealias Element = ScreenshotSmartAreaSupport.Element
+        let window = CGRect(x: 0, y: 0, width: 1200, height: 800)
+        let point = CGPoint(x: 600, y: 400)
+        // A browser: a link inside a div inside <main> inside the page,
+        // the page inside the browser's own panes.
+        let browser: [Element] = [
+            Element(role: "AXLink", subrole: nil, frame: CGRect(x: 590, y: 395, width: 60, height: 16)),
+            Element(role: "AXGroup", subrole: nil, frame: CGRect(x: 500, y: 300, width: 300, height: 200)),
+            Element(role: "AXGroup", subrole: "AXLandmarkMain", frame: CGRect(x: 300, y: 100, width: 900, height: 2400)),
+            Element(role: "AXWebArea", subrole: nil, frame: CGRect(x: 0, y: 80, width: 1200, height: 3000)),
+            Element(role: "AXScrollArea", subrole: nil, frame: CGRect(x: 0, y: 80, width: 1200, height: 720)),
+            Element(role: "AXGroup", subrole: nil, frame: window),
+        ]
+        let page = ScreenshotSmartAreaSupport.areas(chain: browser, point: point, windowFrame: window)
+        suite.expect(page == [CGRect(x: 300, y: 100, width: 900, height: 700),
+                              CGRect(x: 0, y: 80, width: 1200, height: 720), window],
+                     "in a web page only its landmarks, the page area and the window are offered, clipped to view")
+        // A native window: a button in a sidebar row, the sidebar in a split view.
+        let native: [Element] = [
+            Element(role: "AXButton", subrole: nil, frame: CGRect(x: 580, y: 390, width: 90, height: 40)),
+            Element(role: "AXRow", subrole: "AXOutlineRow", frame: CGRect(x: 400, y: 380, width: 400, height: 50)),
+            Element(role: "AXOutline", subrole: nil, frame: CGRect(x: 400, y: 52, width: 400, height: 5000)),
+            Element(role: "AXScrollArea", subrole: nil, frame: CGRect(x: 400, y: 52, width: 400, height: 748)),
+            Element(role: "AXSplitGroup", subrole: nil, frame: CGRect(x: 0, y: 52, width: 1200, height: 748)),
+            Element(role: "AXGroup", subrole: nil, frame: CGRect(x: 0, y: 52, width: 1200, height: 749)),
+        ]
+        let panes = ScreenshotSmartAreaSupport.areas(chain: native, point: point, windowFrame: window)
+        suite.expect(panes == [CGRect(x: 400, y: 52, width: 400, height: 748),
+                               CGRect(x: 0, y: 52, width: 1200, height: 748), window],
+                     "a native window offers its panes, not its buttons, rows or lists, and equal frames once")
+    }
+
     static func run(_ suite: TestSuite) {
+        smartAreaPanes(suite)
         let registrationDomain = UserDefaults.standard.volatileDomain(
             forName: UserDefaults.registrationDomain)
         defer {

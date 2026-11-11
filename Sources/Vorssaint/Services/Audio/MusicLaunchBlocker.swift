@@ -5,9 +5,10 @@ import AppKit
 import CoreServices
 
 /// Blocks a new system music-app process only when a trusted media-key
-/// observation explains it. Other launches are preserved, including voice,
-/// automation, login and headphone commands that deliver no observable key.
-/// Nothing runs while the option, feature or required permission is off.
+/// observation, or the system's logged request to open it for a media
+/// command (headphones, AirPods, Control Center), explains it. Other launches
+/// are preserved, including voice, automation and login. Nothing runs while
+/// the option, feature or required permission is off.
 final class MusicLaunchBlocker: ObservableObject {
     static let shared = MusicLaunchBlocker()
 
@@ -30,6 +31,13 @@ final class MusicLaunchBlocker: ObservableObject {
     /// click that started it is old enough to look like no gesture at all;
     /// judging it again would terminate a launch the user asked for.
     private var judgedLaunchPID: pid_t?
+    private let commandWatcher = MediaCommandLaunchWatcher()
+    /// A media-command launch request the log reported before its launch.
+    private var commandRequest: (bundleID: String, at: TimeInterval, plays: Bool)?
+    /// A launch no key explained, kept briefly in case its request is logged late.
+    private var unexplainedLaunch: (app: NSRunningApplication, at: TimeInterval)?
+    /// The launch just blocked; its own late log line must not arm another.
+    private var lastBlockAt: TimeInterval?
 
     private init() {}
 
@@ -52,6 +60,7 @@ final class MusicLaunchBlocker: ObservableObject {
             return
         }
         isMonitoring = true
+        startCommandWatcher()
         guard observers.isEmpty else { return }
         let center = NSWorkspace.shared.notificationCenter
         // Will-launch usually wins the race before any window shows;
@@ -67,6 +76,7 @@ final class MusicLaunchBlocker: ObservableObject {
     func stop() {
         isMonitoring = false
         removeMediaKeyTap()
+        stopCommandWatcher()
         lastMediaKeyAt = nil
         judgedLaunchPID = nil
         guard !observers.isEmpty else { return }
@@ -98,10 +108,63 @@ final class MusicLaunchBlocker: ObservableObject {
             now: ProcessInfo.processInfo.systemUptime,
             lastTriggerAt: trigger,
             secondsSinceUserGesture: Self.secondsSinceUserGesture
-        ) else { return }
+        ) else {
+            awaitMediaCommand(for: app)
+            return
+        }
+        block(app, startingPlayback: lastMediaKeyCode == MusicLaunchSupport.playPauseKeyCode)
+    }
+
+    private func block(_ app: NSRunningApplication, startingPlayback: Bool) {
+        lastBlockAt = ProcessInfo.processInfo.systemUptime
         guard app.forceTerminate() || app.terminate() else { return }
-        openReplacementIfConfigured(startingPlayback: lastMediaKeyCode == MusicLaunchSupport.playPauseKeyCode
+        openReplacementIfConfigured(startingPlayback: startingPlayback
             && UserDefaults.standard.bool(forKey: DefaultsKey.musicBlockPlayReplacement))
+    }
+
+    private func startCommandWatcher() {
+        commandWatcher.start { [weak self] bundleID, plays in
+            self?.handleCommandRequest(bundleID: bundleID, plays: plays)
+        }
+    }
+
+    private func stopCommandWatcher() {
+        commandWatcher.stop()
+        commandRequest = nil
+        unexplainedLaunch = nil
+        lastBlockAt = nil
+    }
+
+    /// No key explained this launch; a media-command request logged just
+    /// before it does, and one logged just after it still can.
+    private func awaitMediaCommand(for app: NSRunningApplication) {
+        let now = ProcessInfo.processInfo.systemUptime
+        if let request = commandRequest, request.bundleID == app.bundleIdentifier,
+           MusicLaunchSupport.isCommandLaunch(launchAt: now, requestAt: request.at) {
+            commandRequest = nil
+            block(app, startingPlayback: request.plays)
+            return
+        }
+        unexplainedLaunch = (app, now)
+    }
+
+    private func handleCommandRequest(bundleID: String, plays: Bool) {
+        guard Self.blockedBundleIDs.contains(bundleID), isEnabled, AXIsProcessTrusted(),
+              !observers.isEmpty else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        if let pending = unexplainedLaunch, pending.app.bundleIdentifier == bundleID {
+            unexplainedLaunch = nil
+            if !pending.app.isTerminated,
+               MusicLaunchSupport.isCommandLaunch(launchAt: pending.at, requestAt: now) {
+                block(pending.app, startingPlayback: plays)
+                return
+            }
+        }
+        // A media key already blocked this launch; its request arrives after.
+        if let lastBlockAt, MusicLaunchSupport.isCommandLaunch(launchAt: lastBlockAt, requestAt: now) {
+            return
+        }
+        commandRequest = (bundleID, now, plays)
     }
 
     /// Pointer buttons and ordinary keys can ask to open an app. Modifier

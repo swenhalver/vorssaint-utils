@@ -959,7 +959,7 @@ extension Strings {
         switcherUsageHintFormat: "%@ を押したまま移動し、放すとウインドウがアクティブになります。Shift または ← で戻る、W でウインドウを閉じ、Q でアプリを終了、Esc でキャンセルします。",
         musicBlockSection: "メディアキー",
         musicBlockTitle: "ミュージックが勝手に開かないようにする",
-        musicBlockCaption: "検出したメディアキーによる音楽アプリの起動を防ぎます。アクセシビリティの許可が必要です。キーを検出できないヘッドフォンの操作はブロックしません。",
+        musicBlockCaption: "メディアキー、ヘッドフォン、AirPods、コントロールセンターによる音楽アプリの起動を防ぎます。アクセシビリティの許可が必要です。",
         musicBlockUnavailable: "この保護は現在利用できません。オフにしてから再びオンにしてお試しください。",
         musicBlockReplacementLabel: "代わりに開く",
         musicBlockReplacementNone: "なし",

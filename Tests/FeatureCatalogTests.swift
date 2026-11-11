@@ -345,6 +345,23 @@ enum FeatureCatalogTests {
                "brightness keys do not arm the blocker")
         suite.expect(!MusicLaunchSupport.isMusicLaunchTrigger(subtype: 1, data1: musicKeyData(keyCode: 16)),
                "other system-defined subtypes do not arm the blocker")
+        let headphonePlay = MusicLaunchSupport.commandLaunch(in: "2026-11-11 15:02:58.392 Df mediaremoted[363:1ad0a4b] "
+            + "[com.apple.amp.mediaremote:rr] Request: MRDLaunchApplicationWithReason<command<Play>="
+            + "EE2F357A-7A74-46E5-B11A-624168375164> for com.apple.Music")
+        suite.expect(headphonePlay?.bundleID == "com.apple.Music" && headphonePlay?.plays == true,
+               "a logged headphone Play request names the music app and asks it to play")
+        let nextTrack = MusicLaunchSupport.commandLaunch(
+            in: "Request: MRDLaunchApplicationWithReason<command<NextTrack>=A> for com.apple.Music")
+        suite.expect(nextTrack?.bundleID == "com.apple.Music" && nextTrack?.plays == false,
+               "other logged commands open the music app without asking it to play")
+        suite.expect(MusicLaunchSupport.commandLaunch(
+            in: "Response: MRDLaunchApplicationWithReason<command<Play>=A> for com.apple.Music") == nil
+            && MusicLaunchSupport.commandLaunch(in: "Filtering the log data using \"process\"") == nil,
+               "responses and stream headers are not launch requests")
+        suite.expect(MusicLaunchSupport.isCommandLaunch(launchAt: 10, requestAt: 9.6)
+            && MusicLaunchSupport.isCommandLaunch(launchAt: 10, requestAt: 11.5)
+            && !MusicLaunchSupport.isCommandLaunch(launchAt: 10, requestAt: 14),
+               "a launch matches a request logged shortly before or after it, not a stale one")
         suite.expect(MusicLaunchSupport.shouldBlockLaunch(
             now: 10, lastTriggerAt: 9.5, secondsSinceUserGesture: 1),
                "an observed media key newer than the user's last gesture can block a launch")
@@ -3278,6 +3295,12 @@ enum MusicLaunchBlockerContract {
         var lastMediaKeyAt: TimeInterval?
         var lastMediaKeyCode: UInt16?
         var judgedLaunchPID: pid_t?
+        var lastBlockAt: TimeInterval?
+        var commandWatcherRunning = false
+        var awaitedPIDs: [pid_t] = []
+        func startCommandWatcher() { commandWatcherRunning = true }
+        func stopCommandWatcher() { commandWatcherRunning = false; lastBlockAt = nil }
+        func awaitMediaCommand(for app: NSRunningApplication) { awaitedPIDs.append(app.processIdentifier) }
         var replacementCalls = 0
         var replacementPlays: [Bool] = []
         func installMediaKeyTap() {
@@ -3369,6 +3392,8 @@ enum MusicLaunchBlockerContract {
             launch(deliberate)
             suite.expect(deliberate.forceCalls == 0, "voice, automation and login without a media key are left alone")
         }
+        suite.expect(service.awaitedPIDs.suffix(3) == [5, 6, 7] && service.commandWatcherRunning,
+                     "launches no key explains wait for a logged media-command request")
         let delayed = NSRunningApplication(8)
         key(at: 7)
         launch(delayed)

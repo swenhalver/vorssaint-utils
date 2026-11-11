@@ -3,9 +3,11 @@
 
 import Foundation
 
-/// Only an observed media key can explain an automatic music-app launch.
-/// Absence of a click is not evidence: voice, automation and login can all
-/// open an app intentionally without a keyboard or pointer gesture.
+/// An automatic music-app launch is blocked only on positive evidence: an
+/// observed media key, or the system's own record that it opened the app for
+/// a media command (headphones, AirPods, Control Center). Absence of a click
+/// is not evidence: voice, automation and login can all open an app
+/// intentionally without a keyboard or pointer gesture.
 enum MusicLaunchSupport {
     static let systemDefinedEventTypeRawValue: UInt32 = 14
     static let auxiliaryControlButtonsSubtype = 8
@@ -62,5 +64,40 @@ enum MusicLaunchSupport {
               !secondsSinceUserGesture.isNaN, secondsSinceUserGesture >= 0 else { return false }
         let elapsed = now - lastTriggerAt
         return (0...launchArmWindow).contains(elapsed) && secondsSinceUserGesture > elapsed
+    }
+
+    /// How far apart the system's launch request and the launch itself may
+    /// be seen. The log can arrive before or after the launch notification.
+    static let commandLaunchWindow: TimeInterval = 3
+
+    /// mediaremoted logs this line when a media command finds no player and
+    /// asks Launch Services to open one, e.g.
+    /// `Request: MRDLaunchApplicationWithReason<command<Play>=…> for com.apple.Music`.
+    static let commandLaunchMarker = "Request: MRDLaunchApplicationWithReason<"
+    static let commandLaunchLogPredicate =
+        "process == \"mediaremoted\" AND eventMessage CONTAINS \"\(commandLaunchMarker)\""
+
+    /// The app a logged media command asked to open, and whether that
+    /// command was a request to play. Nil for any other line.
+    static func commandLaunch(in line: String) -> (bundleID: String, plays: Bool)? {
+        guard let marker = line.range(of: commandLaunchMarker),
+              let target = line.range(of: " for ", options: .backwards, range: marker.upperBound..<line.endIndex)
+        else { return nil }
+        let bundleID = line[target.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !bundleID.isEmpty, !bundleID.contains(" ") else { return nil }
+        let reason = line[marker.upperBound..<target.lowerBound]
+        var command = ""
+        if let start = reason.range(of: "command<"),
+           let end = reason[start.upperBound...].firstIndex(of: ">") {
+            command = String(reason[start.upperBound..<end])
+        }
+        return (bundleID, command == "Play" || command == "TogglePlayPause")
+    }
+
+    /// A launch and a logged media-command request belong together when
+    /// they are seen within the window of each other, in either order.
+    static func isCommandLaunch(launchAt: TimeInterval, requestAt: TimeInterval) -> Bool {
+        guard launchAt.isFinite, requestAt.isFinite else { return false }
+        return abs(launchAt - requestAt) <= commandLaunchWindow
     }
 }

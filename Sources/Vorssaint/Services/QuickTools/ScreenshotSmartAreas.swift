@@ -5,7 +5,7 @@ import AppKit
 import ApplicationServices
 
 /// The parts of a window under the pointer that a capture can take on its
-/// own: a button, a toolbar, a sidebar, a section of a page. They come from
+/// own: a pane, a sidebar, a toolbar, the page area of a browser. They come from
 /// the app's accessibility tree, asked through the app's own element so the
 /// overlay covering the screen does not answer instead.
 enum ScreenshotSmartAreas {
@@ -24,38 +24,19 @@ enum ScreenshotSmartAreas {
         guard AXUIElementCopyElementAtPosition(app, Float(point.x), Float(point.y), &hit) == .success,
               let hit else { return [windowFrame] }
 
-        var frames: [CGRect] = []
+        var chain: [ScreenshotSmartAreaSupport.Element] = []
         var current: AXUIElement? = hit
-        var steps = 0
-        while let element = current, steps < 40 {
-            steps += 1
+        while let element = current, chain.count < 40 {
             let role = string(element, kAXRoleAttribute)
             if role == kAXWindowRole as String || role == kAXApplicationRole as String { break }
-            if let frame = frame(of: element) {
-                let clipped = frame.intersection(windowFrame)
-                if !clipped.isNull, clipped.width >= 10, clipped.height >= 10, clipped.contains(point) {
-                    frames.append(clipped)
-                }
-            }
+            chain.append(.init(role: role, subrole: string(element, kAXSubroleAttribute), frame: frame(of: element)))
             current = parent(of: element)
         }
-        frames.append(windowFrame)
-        return distinct(frames)
-    }
-
-    /// Nested elements often share a frame; one step should always change it.
-    static func distinct(_ frames: [CGRect]) -> [CGRect] {
-        var result: [CGRect] = []
-        for frame in frames.sorted(by: { $0.width * $0.height < $1.width * $1.height }) {
-            if let last = result.last, isClose(last, frame) { continue }
-            result.append(frame)
-        }
-        return result
+        return ScreenshotSmartAreaSupport.areas(chain: chain, point: point, windowFrame: windowFrame)
     }
 
     static func isClose(_ a: CGRect, _ b: CGRect, tolerance: CGFloat = 3) -> Bool {
-        abs(a.minX - b.minX) <= tolerance && abs(a.minY - b.minY) <= tolerance
-            && abs(a.maxX - b.maxX) <= tolerance && abs(a.maxY - b.maxY) <= tolerance
+        ScreenshotSmartAreaSupport.isClose(a, b, tolerance: tolerance)
     }
 
     /// The level the pointer starts on: the smallest part big enough to be

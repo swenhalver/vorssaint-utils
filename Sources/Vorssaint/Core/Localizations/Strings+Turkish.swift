@@ -959,7 +959,7 @@ extension Strings {
         switcherUsageHintFormat: "Gezinmek için %@ tuşunu basılı tut; pencereyi etkinleştirmek için bırak. Shift veya ← geri gider; W pencereyi kapatır; Q uygulamadan çıkar; Esc iptal eder.",
         musicBlockSection: "Medya tuşları",
         musicBlockTitle: "Müzik uygulamasının kendiliğinden açılmasını engelle",
-        musicBlockCaption: "Algılanan bir medya tuşundan sonra müzik uygulamasının açılmasını engeller. Erişilebilirlik izni gerektirir. Tuş algılanmayan kulaklık komutlarına izin verilir.",
+        musicBlockCaption: "Müzik uygulamasının medya tuşu, kulaklık, AirPods veya Denetim Merkezi ile açılmasını engeller. Erişilebilirlik izni gerektirir.",
         musicBlockUnavailable: "Bu koruma şu anda kullanılamıyor. Yeniden denemek için kapatıp açın.",
         musicBlockReplacementLabel: "Yerine aç",
         musicBlockReplacementNone: "Hiçbiri",

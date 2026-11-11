@@ -959,7 +959,7 @@ extension Strings {
         switcherUsageHintFormat: "Mantén %@ para navegar; suelta para activar la ventana. Mayúsculas o ← retrocede; W cierra la ventana; Q cierra la app; Esc cancela.",
         musicBlockSection: "Teclas multimedia",
         musicBlockTitle: "Evitar que Música se abra sola",
-        musicBlockCaption: "Bloquea la apertura de la app de música tras detectar una tecla multimedia. Requiere acceso de Accesibilidad. Los comandos de auriculares sin una tecla detectada se permiten.",
+        musicBlockCaption: "Bloquea la apertura de la app de música por una tecla multimedia, auriculares, AirPods o el Centro de control. Requiere acceso de Accesibilidad.",
         musicBlockUnavailable: "Esta protección no está disponible ahora. Desactívala y vuelve a activarla para reintentar.",
         musicBlockReplacementLabel: "Abrir en su lugar",
         musicBlockReplacementNone: "Ninguna",

@@ -959,7 +959,7 @@ extension Strings {
         switcherUsageHintFormat: "Podržaním %@ prechádzate oknami; pustením okno aktivujete. Shift alebo ← ide späť; W zatvorí okno; Q ukončí aplikáciu; Esc zruší.",
         musicBlockSection: "Multimediálne klávesy",
         musicBlockTitle: "Zabrániť samovoľnému otváraniu Hudby",
-        musicBlockCaption: "Zablokuje otvorenie hudobnej aplikácie po rozpoznanom multimediálnom klávese. Vyžaduje prístup Prístupnosť. Príkazy zo slúchadiel bez rozpoznaného klávesu ostávajú nedotknuté.",
+        musicBlockCaption: "Zablokuje otvorenie hudobnej aplikácie multimediálnym klávesom, slúchadlami, AirPods alebo Ovládacím centrom. Vyžaduje prístup Prístupnosť.",
         musicBlockUnavailable: "Táto ochrana je teraz nedostupná. Vypnite ju a znova zapnite, aby ste to skúsili ešte raz.",
         musicBlockReplacementLabel: "Otvoriť namiesto toho",
         musicBlockReplacementNone: "Žiadne",

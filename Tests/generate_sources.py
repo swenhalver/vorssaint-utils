@@ -528,7 +528,8 @@ def main():
           + "".join(declaration("Sources/Vorssaint/Services/Audio/MusicLaunchBlocker.swift", prefix)
                     .replace("private ", "", 1) for prefix in [
                         "    func syncWithPreferences(", "    private func start(", "    func stop(",
-                        "    private func handleLaunch(", "    private func handleMediaKeyEvent("])
+                        "    private func handleLaunch(", "    private func handleMediaKeyEvent(",
+                        "    private func block("])
           + "}\n}\n")
     middle_click_lifecycle = "".join(
         declaration("Sources/Vorssaint/Services/MiddleClick/MiddleClickService.swift", prefix)

@@ -510,6 +510,7 @@ if (( TEST )); then
         Sources/Vorssaint/Services/QuickTools/MicMuteSupport.swift
         Sources/Vorssaint/Services/QuickTools/QuickTogglesSupport.swift
         Sources/Vorssaint/Services/QuickTools/ScreenshotCapturePolicy.swift
+        Sources/Vorssaint/Services/QuickTools/ScreenshotSmartAreaSupport.swift
         Sources/Vorssaint/Services/QuickTools/ScreenshotSupport.swift
         Sources/Vorssaint/Services/QuickTools/ScreenshotCanvasSupport.swift
         Sources/Vorssaint/Services/QuickTools/ScreenshotImageImport.swift
