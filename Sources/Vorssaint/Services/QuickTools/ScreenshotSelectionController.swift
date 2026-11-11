@@ -132,6 +132,9 @@ final class ScreenshotSelectionController {
         acceptsCaptureInput && activeMode != .color && !requiresDraggedRegion && !scrollingCaptureEnabled
     }
     fileprivate var isPickingColor: Bool { activeMode == .color }
+    /// Recording offers the window, and the part of it, under the pointer
+    /// whatever the screenshot preferences say; screenshots follow them.
+    fileprivate var autoSelectsAreas: Bool { activeTool == .recording }
     /// The panel `repeatLastRegion()` would act on, or nil when there is
     /// nothing to repeat: the guide hint and the action read the same
     /// property so the bar cannot promise a key that does nothing.
@@ -1291,7 +1294,7 @@ private final class ScreenshotOverlayView: NSView {
         switch controller?.captureTarget ?? .portion {
         case .window: return true
         case .screen: return false
-        case .portion: return highlightWindowsPreference
+        case .portion: return highlightWindowsPreference || controller?.autoSelectsAreas == true
         }
     }
     /// The system-style toolbar and its Options menu, when this surface has
@@ -1645,7 +1648,7 @@ private final class ScreenshotOverlayView: NSView {
     }
 
     private var smartAreasApply: Bool {
-        guard smartAreasEnabled, let controller else { return false }
+        guard let controller, smartAreasEnabled || controller.autoSelectsAreas else { return false }
         return controller.acceptsCaptureInput && !controller.isPickingColor
             && !controller.requiresDraggedRegion && !isCapturePending
             && controller.captureTarget != .screen
@@ -1871,6 +1874,7 @@ private final class ScreenshotOverlayView: NSView {
 
     func captureToolDidChange() {
         dragOrigin = nil
+        clearSmartAreas()
         if keepsAdjustedSelection {
             refreshConfirmControl()
         } else {
@@ -1885,6 +1889,11 @@ private final class ScreenshotOverlayView: NSView {
         needsLayout = true
         needsDisplay = true
         refreshPointerState()
+        // Switching to Record offers what is under a pointer that has not moved.
+        if pointerIsInside, !pointerIsOverToolbar(hoverPoint) {
+            updatePointerHover(hoverPoint)
+            requestSmartAreas(at: hoverPoint)
+        }
     }
 
     // MARK: Mouse

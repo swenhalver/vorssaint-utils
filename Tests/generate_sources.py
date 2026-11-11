@@ -2113,6 +2113,14 @@ def main():
                     for prefix in refresh_methods)
           + "}\nextension ScreenshotSelectionRefreshContract.View {\n"
           + declaration(selection, "    func captureToolDidChange()")
+              # The contract's view has no smart areas or toolbar to offer from.
+              .replace("        clearSmartAreas()\n", "")
+              .replace("""        // Switching to Record offers what is under a pointer that has not moved.
+        if pointerIsInside, !pointerIsOverToolbar(hoverPoint) {
+            updatePointerHover(hoverPoint)
+            requestSmartAreas(at: hoverPoint)
+        }
+""", "")
           + declaration(selection, "    func setNotchCaptureControlsHeight(")
           + declaration(selection, "    func refreshFullScreenControlVisibility()")
           + declaration(selection, "    private func pointerIsOverFullScreenControl(").replace("private func", "func", 1)
