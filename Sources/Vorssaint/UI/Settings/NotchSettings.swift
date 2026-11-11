@@ -183,8 +183,8 @@ struct NotchSettings: View {
         .onChange(of: accessData) { _, _ in NotchService.shared.syncWithPreferences() }
         .onChange(of: browserCovers) { _, _ in NotchMusicService.shared.syncBrowserCovers() }
         .onChange(of: tab) { _, _ in draggingModule = nil; draggingControl = nil }
-        .onAppear(perform: consumeModuleHint)
-        .onChange(of: router.notchModule) { _, _ in consumeModuleHint() }
+        .onAppear(perform: revealDestination)
+        .onChange(of: router.requestID) { _, _ in revealDestination() }
         .onAppear(perform: consumeCompanionHint)
         .onChange(of: router.notchCompanion) { _, _ in consumeCompanionHint() }
         // Uninstalled while its tab shows, the companion leaves the page to the layout.
@@ -214,12 +214,10 @@ struct NotchSettings: View {
         }.id(tab)
     }
 
-    /// A section of the island can ask for its own options; the hint is one-shot.
-    private func consumeModuleHint() {
-        guard let module = router.notchModule else { return }
-        router.notchModule = nil
-        selectedModule = module
-        tab = .content
+    private func revealDestination() {
+        guard let location = router.destination.notchLocation else { return }
+        if case .module(let module) = location { selectedModule = module }
+        tab = location.tab
     }
 
     private func sync() {
@@ -256,13 +254,13 @@ struct NotchSettings: View {
                           isOn: liquidGlassIsOn ? .constant(true) : $translucentBackground)
                     .disabled(liquidGlassIsOn)
             }
-            SettingsCard(title: "Theme") {
-                switchRow("paintpalette", "One color when closed",
+            SettingsCard(title: text.themeSection) {
+                switchRow("paintpalette", text.themeOneColor,
                           caption: "Icons, readings, battery and notifications in the closed island all take one color. Album art, app icons and the companion keep theirs. The open island is unchanged.",
                           isOn: $themeEnabled)
                 if themeEnabled {
-                    SettingsRow(symbol: "eyedropper", title: "Theme color") {
-                        ColorPicker("Theme color",
+                    SettingsRow(symbol: "eyedropper", title: text.themeColor) {
+                        ColorPicker(text.themeColor,
                                     selection: Binding(get: { NotchCustomColor.color(themeColor)
                                                            ?? NotchCustomColor.color(NotchTheme.defaultColor) ?? .cyan },
                                                        set: { themeColor = NotchCustomColor.hex($0) ?? themeColor }),
@@ -445,7 +443,7 @@ struct NotchSettings: View {
             let activities = FeatureStrings.notchActivities(l10n.language)
             SettingsFeatureSwitchRow(symbol: NotchControlItem.keepAwake.symbol, title: activities.keepAwakeActivity,
                                      caption: activities.keepAwakeActivityHint, isOn: $keepAwakeActivity, feature: .keepAwake)
-            SettingsRow(symbol: "paintpalette", title: "Keep Awake color",
+            SettingsRow(symbol: "paintpalette", title: text.keepAwakeColor,
                         caption: "The cup and timer in the island, and the Keep Awake tile.") {
                 HStack(spacing: 8) {
                     if !keepAwakeColor.isEmpty {

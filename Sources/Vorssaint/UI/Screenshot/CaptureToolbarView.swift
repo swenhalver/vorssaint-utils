@@ -5,9 +5,9 @@ import AVFoundation
 import SwiftUI
 
 /// The capture toolbar, laid out like the one macOS opens with
-/// Command-Shift-5: close, the three capture modes, the two record modes,
-/// then Vorssaint's own text and color tools, Options, Markup and the button
-/// that takes the shot. Dragging its background moves it; the overlay keeps
+/// Command-Shift-5: close, the three capture modes and scrolling capture,
+/// the two record modes, then Vorssaint's own text and color tools, Options,
+/// Markup and the button that takes the shot. Dragging its background moves it; the overlay keeps
 /// it on the display and remembers where it was left.
 struct CaptureToolbarView: View {
     @ObservedObject var options: ScreenCaptureSelectionOptions
@@ -100,7 +100,7 @@ struct CaptureToolbarView: View {
         case .capturePortion: return strings.capturePortion
         case .recordScreen: return strings.recordScreen
         case .recordPortion: return strings.recordPortion
-        case .text, .color: return mode.tool.settingsTitle(l10n.s, language: l10n.language)
+        case .captureScrolling, .text, .color: return mode.tool.settingsTitle(l10n.s, language: l10n.language)
         }
     }
 
@@ -203,7 +203,7 @@ struct CaptureOptionsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if tool == .screenshot || tool == .recording {
+            if tool == .screenshot || tool == .scrolling || tool == .recording {
                 section(recorderStrings.folderLabel) {
                     row(id: "folder-clipboard-only", title: strings.clipboardOnlyChoice, checked: clipboardOnly) {
                         let stored = RecorderSupport.clipboardOnlyFolder.path
@@ -250,7 +250,7 @@ struct CaptureOptionsCard: View {
                 }
             }
             section(strings.optionsButton) {
-                if tool == .screenshot || tool == .recording {
+                if tool == .screenshot || tool == .scrolling || tool == .recording {
                     row(id: "thumbnail", title: strings.floatingThumbnailToggle, checked: thumbnail) {
                         if tool == .recording { recorderThumbnail.toggle() } else { screenshotThumbnail.toggle() }
                     }
@@ -263,7 +263,7 @@ struct CaptureOptionsCard: View {
                         showsClicks.toggle()
                     }
                 }
-                if tool == .screenshot || tool == .recording {
+                if tool == .screenshot || tool == .scrolling || tool == .recording {
                     // Clipboard only is pointless without the copy, so it stays on.
                     row(id: "clipboard", title: strings.copyToClipboardToggle,
                         checked: copiesToClipboard || clipboardOnly) {

@@ -104,7 +104,7 @@ struct NotchAgentsSettingsControls: View {
                                       provider: claude ? .claude : codex ? .codex : opencode ? .opencode : .copilot)
                     .padding(.leading, settingsRowTextInset)
             }
-            SettingsRow(symbol: "paintpalette", title: "Closed island color",
+            SettingsRow(symbol: "paintpalette", title: FeatureStrings.notch(l10n.language).agentsClosedColor,
                         caption: "The AI marks, rings and readings while the island is closed. Red and orange still warn when a limit is nearly used up.") {
                 HStack(spacing: 8) {
                     if !compactColor.isEmpty {

@@ -92,9 +92,10 @@ enum CaptureToolbarTests {
         // MARK: Toolbar modes
 
         suite.expect(CaptureToolbarMode.groups(available: ScreenCaptureTool.allCases)
-                        == [[.captureScreen, .captureWindow, .capturePortion],
+                        == [[.captureScreen, .captureWindow, .capturePortion, .captureScrolling],
                             [.recordScreen, .recordPortion], [.color]],
-                     "the toolbar lists capture, then record, then Vorssaint's color picker; text is a button beside Markup")
+                     "the toolbar lists capture with scrolling, then record, then Vorssaint's color picker; "
+                        + "text is a button beside Markup")
         suite.expect(CaptureToolbarMode.groups(available: [.recording])
                         == [[.recordScreen, .recordPortion]],
                      "a mode without its tool installed is left off the toolbar")
@@ -105,9 +106,10 @@ enum CaptureToolbarTests {
         suite.expect(CaptureToolbarMode.allCases.allSatisfy {
             CaptureToolbarMode(tool: $0.tool, target: $0.target) == $0 && $0.tool.offers($0.target)
         }, "each toolbar button is a tool and target the tool offers")
-        suite.expect(!CaptureToolbarMode.color.offersMarkup
-                     && CaptureToolbarMode.allCases.filter { $0 != .color }.allSatisfy(\.offersMarkup),
-                     "Markup is offered wherever an area, window or screen is chosen")
+        suite.expect(!CaptureToolbarMode.color.offersMarkup && !CaptureToolbarMode.captureScrolling.offersMarkup
+                     && CaptureToolbarMode.allCases.filter { $0 != .color && $0 != .captureScrolling }
+                        .allSatisfy(\.offersMarkup),
+                     "Markup is offered wherever an area, window or screen is chosen, not for a scrolling page")
         func stored(_ value: String?) -> (String) -> String? { { _ in value } }
         suite.expect(ScreenCaptureTarget.remembered(for: .screenshot, stored: stored("window")) == .window
                      && ScreenCaptureTarget.remembered(for: .recording, stored: stored("window")) == .portion
