@@ -5,7 +5,7 @@ import AppKit
 
 /// The top-center strip of every display, at the notch. Pushing the pointer
 /// into it opens the notch island (`notchTopEdgeOpens`); clicking in it opens
-/// the capture toolbar (`captureTopEdgeClick`). Pushing fires once per entry
+/// the capture toolbar, or closes it when open (`captureTopEdgeClick`). Pushing fires once per entry
 /// and never while a button is held, so an area dragged up to the edge does
 /// not cancel itself.
 final class CaptureHotspot {
@@ -120,18 +120,21 @@ final class CaptureHotspot {
     }
 
     /// True when the press or release belongs to a click in the strip,
-    /// which opens the capture toolbar on release. A click while capture is
-    /// already on screen belongs to it, as an area started at the top edge.
+    /// which on release opens the capture toolbar, or closes it when it is
+    /// already open. Both halves are taken, so an open capture never treats
+    /// the click as an area or a window to take.
     private func mouse(down: Bool) -> Bool {
         let hit = ScreenshotSupport.captureHotspotDisplay(containing: NSEvent.mouseLocation, in: regions)
         if down {
-            pressedInStrip = clickCaptures && hit != nil && !ScreenshotSelectionController.isSessionOnScreen
+            pressedInStrip = clickCaptures && hit != nil
             return pressedInStrip
         }
         guard pressedInStrip else { return false }
         pressedInStrip = false
-        guard let hit, !ScreenshotSelectionController.isSessionOnScreen else { return true }
+        guard let hit else { return true }
         handOffPointer(from: hit)
+        // On the next turn, once the system no longer reports the button
+        // held, which an open capture requires before it closes.
         DispatchQueue.main.async {
             ScreenCaptureService.shared.capture(initial: .screenshot, fromShortcut: true)
         }

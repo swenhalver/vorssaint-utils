@@ -50,6 +50,7 @@ struct NotchSettings: View {
     @AppStorage(DefaultsKey.notchCoversMenus) private var coversMenus = true
     @AppStorage(DefaultsKey.notchHoverDelay) private var hoverDelay = NotchSupport.defaultHoverDelay
     @AppStorage(DefaultsKey.notchCloseDelay) private var closeDelay = NotchSupport.defaultCloseDelay
+    @AppStorage(DefaultsKey.notchAnimationTime) private var animationTime = NotchSupport.defaultAnimationTime
     @AppStorage(DefaultsKey.notchReturnHome) private var returnHome = false
     @AppStorage(DefaultsKey.notchHomeModule) private var homeModule = NotchModule.controls.rawValue
     @AppStorage(DefaultsKey.notchOpensActivity) private var opensActivity = true
@@ -698,6 +699,9 @@ struct NotchSettings: View {
                     hoverDelayControl
                     if hoverExpand { closeDelayControl }
                 }
+                delayControl(editor.animationTime, hint: editor.animationTimeHint, value: $animationTime,
+                             range: NotchSupport.animationTimeRange, sanitize: NotchSupport.sanitizedAnimationTime)
+                    .onChange(of: animationTime) { _, _ in NotchSupport.syncAnimationTime() }
                 switchRow("arrow.up.to.line", text.topEdgeOpen, caption: topEdgeOpens ? text.topEdgeOpenHint : nil,
                           isOn: $topEdgeOpens)
                     .onChange(of: topEdgeOpens) { _, _ in NotchService.shared.syncWithPreferences() }

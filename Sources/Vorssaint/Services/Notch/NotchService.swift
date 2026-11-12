@@ -1190,6 +1190,7 @@ final class NotchService: ObservableObject {
     func syncWithPreferences() {
         preferenceSyncWork?.cancel(); preferenceSyncWork = nil
         CaptureHotspot.shared.syncWithPreferences()
+        NotchSupport.syncAnimationTime()
         guard NotchSupport.isEnabled() else { stop(); return }
         if !running {
             running = true

@@ -156,7 +156,7 @@ struct ScreenshotCaptureSettings: View {
                 }
                 Toggle("Click the top of the screen", isOn: $topEdgeClick)
                     .onChange(of: topEdgeClick) { _, _ in ScreenCaptureService.shared.syncWithPreferences() }
-                Text("Click the middle of any display’s top edge, at the notch, to open the capture toolbar.")
+                Text("Click the middle of any display’s top edge, at the notch, to open the capture toolbar. Click there again to close it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Toggle("Detect areas inside windows", isOn: $smartAreas)

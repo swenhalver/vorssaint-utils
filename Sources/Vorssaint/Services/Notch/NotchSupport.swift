@@ -1682,6 +1682,19 @@ enum NotchSupport {
     }
 
     /// An unset value keeps the old pause rather than reading as zero.
+    /// How long the island's opening takes, as the time of its widening.
+    static let defaultAnimationTime = 0.44
+    static let animationTimeRange = 0.10...1.0
+
+    static func sanitizedAnimationTime(_ value: TimeInterval) -> TimeInterval {
+        value.isFinite ? min(animationTimeRange.upperBound, max(animationTimeRange.lowerBound, value)) : defaultAnimationTime
+    }
+
+    static func syncAnimationTime(in defaults: UserDefaults = .standard) {
+        let time = sanitizedAnimationTime(defaults.object(forKey: DefaultsKey.notchAnimationTime) as? Double ?? defaultAnimationTime)
+        NotchMotion.timeScale = time / defaultAnimationTime
+    }
+
     static func closeDelay(in defaults: UserDefaults = .standard) -> TimeInterval {
         sanitizedCloseDelay(defaults.object(forKey: DefaultsKey.notchCloseDelay) as? Double ?? defaultCloseDelay)
     }
@@ -2903,10 +2916,15 @@ enum NotchMotion {
         }
     }
 
-    static let growingWidth = Spring(duration: 0.44, bounce: 0.25)
-    static let growingHeight = Spring(duration: 0.38, bounce: 0.22)
-    static let shrinkingWidth = Spring(duration: 0.30, bounce: 0)
-    static let shrinkingHeight = Spring(duration: 0.26, bounce: 0)
+    /// The chosen animation time as a share of the standard one; every
+    /// opening and closing spring, and the content fading with it, scales by it.
+    static var timeScale: Double = 1
+    static var growingWidth: Spring { Spring(duration: 0.44 * timeScale, bounce: 0.25) }
+    static var growingHeight: Spring { Spring(duration: 0.38 * timeScale, bounce: 0.22) }
+    static var shrinkingWidth: Spring { Spring(duration: 0.30 * timeScale, bounce: 0) }
+    static var shrinkingHeight: Spring { Spring(duration: 0.26 * timeScale, bounce: 0) }
+    /// How long the motion model follows a spring before calling it settled.
+    private static var horizon: TimeInterval { 2 * max(1, timeScale) }
     /// A strip that stays on screen and only fits a new reading, as a level
     /// passing 99% or 9%, eases to its width without a swing, either way.
     static let steadyWidth = Spring(duration: 0.5, bounce: 0)
@@ -2951,7 +2969,7 @@ enum NotchMotion {
         let sides = [(from.width, to.width, true), (from.height, to.height, false)].filter { $0.0 != $0.1 }
         let step = 1.0 / 240
         var time = step
-        while time < 2, !sides.allSatisfy({ spring(from: $0.0, to: $0.1, width: $0.2).progress(at: time) >= 0.99 }) {
+        while time < horizon, !sides.allSatisfy({ spring(from: $0.0, to: $0.1, width: $0.2).progress(at: time) >= 0.99 }) {
             time += step
         }
         return sides.isEmpty ? 0 : time
@@ -2962,7 +2980,7 @@ enum NotchMotion {
         let step = 1.0 / 240
         var settled = step
         var time = step
-        while time < 2 {
+        while time < horizon {
             let size = size(at: time, from: from, to: to, steady: steady)
             let offset = offset(at: time, from: from, to: to, start: startOffset, steady: steady)
             if abs(size.width - to.width) > settledDistance || abs(size.height - to.height) > settledDistance

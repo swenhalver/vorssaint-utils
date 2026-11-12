@@ -300,7 +300,7 @@ enum SettingsDirectory {
                   feature: .monitorPower, notch: .activity, when: tintedBattery),
             .init([notchLowBattery.earlyThreshold], feature: .monitorPower, notch: .activity,
                   when: tintedBattery && state.on(DefaultsKey.notchLowBatteryEarly)),
-            .init([notchEditor.behavior, notchEditor.opening, notch.topEdgeOpen, s.quickToolShortcutToggle,
+            .init([notchEditor.behavior, notchEditor.opening, notchEditor.animationTime, notch.topEdgeOpen, s.quickToolShortcutToggle,
                    FeatureStrings.notchGestures(language).title, notch.hapticFeedback, notchEditor.reopening,
                    notchEditor.openActivity, notch.display, notch.hideInFullscreen, notchEditor.destinations,
                    notch.panel, notch.tools, notch.files, notch.captures, notchEditor.privacy, notch.showInCaptures,
