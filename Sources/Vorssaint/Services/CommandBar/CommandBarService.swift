@@ -1979,7 +1979,8 @@ final class CommandBarService: ObservableObject {
                                     // good matches; it never jumps over a
                                     // better one, or the list would go stale.
                                     + (pinnedKeys.contains(entry.stableKey)
-                                        ? CommandBarPreferences.pinTieBreak : 0))
+                                        ? CommandBarPreferences.pinTieBreak : 0),
+                                demoted: CommandBarSearch.isParallelsApp(id: entry.id))
         }
         let ranked = CommandBarSearch.featureOrdered(
             CommandBarSearch.rankedIndexes(candidates: candidates, matching: effectiveQuery),

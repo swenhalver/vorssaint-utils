@@ -184,6 +184,7 @@ struct CaptureOptionsCard: View {
     @AppStorage(DefaultsKey.screenshotSaveFolder) private var screenshotFolder = ""
     @AppStorage(DefaultsKey.recorderSaveFolder) private var recorderFolder = ""
     @AppStorage(DefaultsKey.recorderCountdown) private var recorderCountdown = 3
+    @AppStorage(DefaultsKey.screenshotDelay) private var screenshotDelay = 0
     @AppStorage(DefaultsKey.screenshotPreviewEnabled) private var screenshotThumbnail = true
     @AppStorage(DefaultsKey.recorderFloatingThumbnail) private var recorderThumbnail = true
     @AppStorage(DefaultsKey.screenshotAdjustSelection) private var remembersSelection = false
@@ -224,8 +225,22 @@ struct CaptureOptionsCard: View {
                 }
             }
             // The recorder's countdown runs after Record, as on macOS. The
-            // screenshot delay runs before this surface opens, so it stays in
-            // Settings rather than promising a timer this Capture won't run.
+            // screenshot delay runs before this surface opens, so choosing
+            // one here starts the capture over through that countdown.
+            if tool == .screenshot || tool == .scrolling {
+                section(strings.timerLabel) {
+                    ForEach(ScreenshotSupport.allowedDelays, id: \.self) { seconds in
+                        row(id: "delay-\(seconds)",
+                            title: seconds == 0
+                                ? strings.timerNone
+                                : String(format: recorderStrings.countdownSecondsFormat, seconds),
+                            checked: ScreenshotSupport.sanitizedDelay(screenshotDelay) == seconds) {
+                            screenshotDelay = seconds
+                            if seconds > 0 { ScreenCaptureService.shared.restartThroughDelay() }
+                        }
+                    }
+                }
+            }
             if tool == .recording {
                 section(strings.timerLabel) {
                     ForEach(ScreenshotSupport.allowedDelays, id: \.self) { seconds in

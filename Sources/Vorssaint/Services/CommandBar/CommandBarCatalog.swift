@@ -1041,6 +1041,10 @@ enum CommandBarCatalog {
         // Offering ourselves is a dead end: activating a menu bar app shows
         // nothing, so the row would look broken.
         let ownBundleID = Bundle.main.bundleIdentifier
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        // Parallels files a virtual machine's apps under a folder named by
+        // its identifier; the folder's display name is the machine's.
+        var machineNames: [String: String] = [:]
         return apps.filter { $0.bundleID != ownBundleID }.map { app in
             let isRunning = app.bundleID.map { runningBundleIDs.contains($0) } ?? false
                 || runningPaths.contains(app.url.standardizedFileURL.path)
@@ -1048,15 +1052,28 @@ enum CommandBarCatalog {
             // person learned, and an ideographic title may be easier to type
             // by sound.
             let diskName = app.url.deletingPathExtension().lastPathComponent
+            let parallels = CommandBarSearch.isParallelsApp(id: "app.\(app.id)")
             let keywords = CommandBarSearch.applicationKeywords(
                 title: app.name, diskName: diskName, alternateNames: app.alternateNames)
+                + (parallels ? " parallels windows" : "")
             return CommandBarEntry(
                 id: "app.\(app.id)",
                 // Two copies of one app need two rows, so the row is keyed by
                 // where it lives; what the person named stays with the app.
                 stableKey: CommandBarRowShortcuts.appKey(bundleID: app.bundleID, path: app.id),
                 title: app.name,
-                subtitle: bar.kindApp,
+                // Where the app lives tells two of one name apart; one from
+                // a virtual machine is marked, as it ranks, apart from the Mac's own.
+                subtitle: {
+                    let path = app.url.standardizedFileURL.path
+                    guard parallels else {
+                        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+                    }
+                    let folder = app.url.deletingLastPathComponent().path
+                    let machine = machineNames[folder] ?? FileManager.default.displayName(atPath: folder)
+                    machineNames[folder] = machine
+                    return "Parallels · \(machine)"
+                }(),
                 keywords: keywords,
                 icon: .appIcon(path: app.url.path),
                 isActive: isRunning,

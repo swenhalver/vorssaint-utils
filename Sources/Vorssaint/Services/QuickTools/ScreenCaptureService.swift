@@ -242,6 +242,19 @@ final class ScreenCaptureService: ObservableObject {
         }
     }
 
+    /// The toolbar's Timer was set while it is open. The delay runs before
+    /// the surface opens, so the open capture closes and starts over through
+    /// the countdown, in the mode it was in.
+    func restartThroughDelay() {
+        guard selection != nil, let tool = options?.selectedTool else { return }
+        // After the click that chose the timer has been handled.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.selection != nil else { return }
+            self.cancelSelection()
+            self.capture(initial: tool)
+        }
+    }
+
     /// The direct full-screen shortcut and the chooser share one countdown.
     /// Pressing either while the other is waiting cancels the pending action.
     func performAfterDelay(_ delay: Int, tools: [ScreenCaptureTool]? = nil, action: @escaping () -> Void) {

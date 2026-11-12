@@ -133,29 +133,37 @@ struct CommandBarCandidate {
     /// leads ordinary textual matches.
     let priority: Int
     let boost: Int
+    /// Ranks below every row that is not, whatever its match, short of a
+    /// deliberate preference: an app inside a Parallels virtual machine,
+    /// named like the Mac's own Calculator, Clock or Viewer.
+    let demoted: Bool
 
     init(index: Int,
          title: String,
          keywords: String = "",
          priority: Int = 0,
-         boost: Int = 0) {
+         boost: Int = 0,
+         demoted: Bool = false) {
         self.init(index: index,
                   normalizedTitle: CommandBarSearch.normalized(title),
                   normalizedKeywords: CommandBarSearch.normalized(keywords),
                   priority: priority,
-                  boost: boost)
+                  boost: boost,
+                  demoted: demoted)
     }
 
     init(index: Int,
          normalizedTitle: String,
          normalizedKeywords: String,
          priority: Int = 0,
-         boost: Int = 0) {
+         boost: Int = 0,
+         demoted: Bool = false) {
         self.index = index
         self.normalizedTitle = normalizedTitle
         self.normalizedKeywords = normalizedKeywords
         self.priority = priority
         self.boost = boost
+        self.demoted = demoted
     }
 }
 
@@ -165,6 +173,12 @@ struct CommandBarCandidate {
 /// also matches as an in-order subsequence of a word ("brlho" finds "brilho")
 /// and, as a last resort, within one edit of a word ("birlho" too).
 enum CommandBarSearch {
+    /// An app Parallels publishes from a Windows virtual machine. Its rows
+    /// are keyed by path, as every app row is.
+    static func isParallelsApp(id: String) -> Bool {
+        id.hasPrefix("app.") && id.contains("/Applications (Parallels)/")
+    }
+
     /// A leading colon scopes the global search to emoji. The marker is not
     /// part of the text being matched, so `:fire` finds the same emoji as
     /// `fire` inside the Emoji category.
@@ -369,7 +383,7 @@ enum CommandBarSearch {
     static func rankedIndexes(candidates: [CommandBarCandidate], matching query: String) -> [Int] {
         let normalizedQuery = normalized(query)
         let tokens = QueryToken.tokens(of: normalizedQuery)
-        let scored: [(index: Int, priority: Int, tier: Int, score: Int, position: Int)] = candidates.enumerated()
+        let scored: [(index: Int, priority: Int, demoted: Bool, tier: Int, score: Int, position: Int)] = candidates.enumerated()
             .compactMap { position, candidate in
                 guard let base = score(normalizedTitle: candidate.normalizedTitle,
                                        normalizedKeywords: candidate.normalizedKeywords,
@@ -378,12 +392,16 @@ enum CommandBarSearch {
                 let tier = matchTier(title: candidate.normalizedTitle,
                                      keywords: candidate.normalizedKeywords,
                                      query: normalizedQuery)
-                return (candidate.index, candidate.priority, tier,
+                // A title that starts with the query and one that holds it
+                // share a tier, so what the person picks most often can lead
+                // between them; an exact title still always wins.
+                return (candidate.index, candidate.priority, candidate.demoted, tier == 4 ? 3 : tier,
                         base + candidate.boost, position)
             }
         return scored
             .sorted {
                 if $0.priority != $1.priority { return $0.priority > $1.priority }
+                if $0.demoted != $1.demoted { return !$0.demoted }
                 if $0.tier != $1.tier { return $0.tier > $1.tier }
                 if $0.score != $1.score { return $0.score > $1.score }
                 return $0.position < $1.position
@@ -829,7 +847,15 @@ enum CommandBarQueryHabits {
     }
 
     static let storedQueryLimit = 320
-    private static let resultLimit = 4
+    /// What the last pick for some letters earns; each pick before it earns
+    /// one step less, and each further letter typed more than all the steps.
+    /// The most a pick earns, at the longest remembered letters, stays under
+    /// a name the person gave a row, which still leads.
+    static let lastPickBoost = 300
+    static let recencyStep = 3
+    static let specificityStep = recencyStep * resultLimit
+    /// How many picks each run of letters remembers, and so orders.
+    private static let resultLimit = 8
 
     static func decode(_ raw: String?) -> Store {
         guard let raw, let data = raw.data(using: .utf8),
@@ -875,10 +901,14 @@ enum CommandBarQueryHabits {
                       store: Store,
                       now: Double) -> Int {
         preparedQuery.keys.reduce(0) { best, queryKey in
-            guard let use = store[queryKey.digest]?[resultID] else { return best }
-            let learned = CommandBarUsage.boost(for: use, now: now) * 5
-                + queryKey.specificity * 6
-            return max(best, min(learned, 720))
+            guard let choices = store[queryKey.digest], let use = choices[resultID] else { return best }
+            // What was picked for these letters comes back in the order it
+            // was picked: the last pick first, the one before it second, and
+            // so on, whatever was picked more often. Longer letters count
+            // for more than any place in that order, so what was picked for
+            // exactly what is typed leads what was picked for its beginning.
+            let newer = choices.reduce(0) { $0 + ($1.key != resultID && $1.value.lastUsed > use.lastUsed ? 1 : 0) }
+            return max(best, lastPickBoost - newer * recencyStep + queryKey.specificity * specificityStep)
         }
     }
 
