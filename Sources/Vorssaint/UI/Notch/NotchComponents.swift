@@ -364,6 +364,18 @@ struct NotchRail<Item: Identifiable, Content: View>: View {
     }
 }
 
+/// Set on the home page's tiles while each names itself in one line.
+private struct NotchOneLineTilesKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var notchOneLineTiles: Bool {
+        get { self[NotchOneLineTilesKey.self] }
+        set { self[NotchOneLineTilesKey.self] = newValue }
+    }
+}
+
 private struct NotchGlassSurfaceKey: EnvironmentKey {
     static let defaultValue = false
 }

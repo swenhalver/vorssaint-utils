@@ -295,6 +295,10 @@ enum NotchLayout {
     /// launch points this at them; a tile that needs its second line keeps
     /// the island's full height.
     static var tilesFitOneLine: (CGFloat) -> Bool = { _ in true }
+    /// Tiles that all keep to one line center the icon and name in their
+    /// own height, and their rail rises this far so the icons stay where
+    /// they were: half the room a second line would have taken.
+    static let oneLineTileRise: CGFloat = 7.5
 
     /// How wide a home tile's label may run: its cell, wider than the tile
     /// where the rail spreads to fill the row, less the tile's side padding.
@@ -729,6 +733,9 @@ struct NotchControlsLayout: Equatable {
     var bottomTrim: CGFloat = 0
 
     var height: CGFloat { contentHeight - bottomTrim }
+
+    /// Every tile names itself in one line. See `NotchLayout.oneLineTileRise`.
+    var oneLineTiles: Bool { bottomTrim > 0 }
 
     private var contentHeight: CGFloat {
         let rail = shortcutRows > 0
@@ -1315,8 +1322,8 @@ enum NotchControlSetupRequirement: Equatable {
 }
 
 enum NotchControlItem: String, CaseIterable, Identifiable {
-    case volume, brightness, keyboardLight, music, mixer, keepAwake, timer, calendar, microphone, screenshot, recording, speedTest, panel, commandBar, markup, scratchpad
-    static let defaultHidden = "keyboardLight,microphone,screenshot,recording,speedTest,panel,commandBar,scratchpad,markup"
+    case volume, brightness, keyboardLight, music, mixer, keepAwake, timer, calendar, microphone, screenshot, recording, speedTest, panel, commandBar, markup, hide, scratchpad
+    static let defaultHidden = "keyboardLight,microphone,screenshot,recording,speedTest,panel,commandBar,scratchpad,markup,hide"
     var id: String { rawValue }
 
     /// A level draws as a slider in the card row; everything else is a tile.
@@ -1344,6 +1351,7 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
         case .commandBar: return "command"
         case .scratchpad: return "note.text"
         case .markup: return "pencil.tip.crop.circle"
+        case .hide: return "eye.slash"
         case .music: return NotchModule.music.symbol
         case .timer: return NotchModule.timer.symbol
         case .calendar: return NotchModule.calendar.symbol
@@ -1360,7 +1368,7 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
         case .recording: return .feature(.screenRecorder)
         case .commandBar: return .feature(.commandBar)
         case .scratchpad: return .feature(.scratchpad)
-        case .panel: return .none
+        case .panel, .hide: return .none
         case .mixer: return .page(.mixer, feature: .mixer)
         case .speedTest: return .page(.system, feature: .monitorNetwork)
         case .music: return .page(.music, feature: nil)
@@ -1382,7 +1390,7 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
         case .speedTest: return AppFeature.monitorNetwork.isAvailable(in: defaults) && NotchSupport.modules(in: defaults).contains(.system)
         case .commandBar: return AppFeature.commandBar.isAvailable(in: defaults)
         case .scratchpad: return AppFeature.scratchpad.isAvailable(in: defaults)
-        case .panel: return true
+        case .panel, .hide: return true
         case .music: return NotchSupport.modules(in: defaults).contains(.music)
         case .timer: return NotchSupport.modules(in: defaults).contains(.timer)
         case .calendar: return NotchSupport.modules(in: defaults).contains(.calendar)

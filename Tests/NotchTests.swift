@@ -2269,7 +2269,7 @@ enum NotchTests {
         suite.expect(!NotchSupport.modules(in: defaults).contains(.mixer)
                && !NotchSupport.controls(in: defaults).contains(.volume), "mixer availability gates its module and volume control")
         defaults.set(true, forKey: AppFeature.mixer.availabilityKey)
-        suite.expect(NotchControlItem.allCases.filter { $0.setupRequirement == .none } == [.panel],
+        suite.expect(NotchControlItem.allCases.filter { $0.setupRequirement == .none } == [.panel, .hide],
                      "every unavailable island control with a setup path has a navigation target")
         suite.expect(NotchControlItem.allCases.filter(\.isLevel) == [.volume, .brightness, .keyboardLight]
                      && !NotchQuickAction.optionalActions.contains(.control(.keyboardLight)),

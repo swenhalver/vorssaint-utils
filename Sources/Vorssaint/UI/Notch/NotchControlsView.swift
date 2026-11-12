@@ -52,6 +52,10 @@ struct NotchControlsView: View {
                               leastSpacing: NotchLayout.shortcutLeastSpacing, rowSpacing: layout.shortcutRowSpacing) { item in
                         shortcut(item)
                     }
+                    // The tiles center their one line, and the rail rises so
+                    // the icons stay level with where two lines put them.
+                    .padding(.top, layout.oneLineTiles ? -NotchLayout.oneLineTileRise : 0)
+                    .environment(\.notchOneLineTiles, layout.oneLineTiles)
                 }
             }
             // The last tiles keep their height and run that far past the
@@ -119,6 +123,9 @@ struct NotchControlsView: View {
             NotchActionTile(symbol: item.symbol, title: item.title(l10n)) {
                 service.perform { ScreenCaptureService.shared.captureForMarkup() }
             }
+        case .hide:
+            NotchActionTile(symbol: item.symbol, title: item.title(l10n), active: service.islandHidden,
+                            action: service.toggleIslandHidden)
         case .recording: NotchRecorderButton(service: service)
         case .speedTest:
             NotchActionTile(symbol: item.symbol, title: item.title(l10n)) { service.showMetric(.network) }
@@ -150,7 +157,8 @@ enum NotchHomeLabels {
         let font = NSFont.systemFont(ofSize: 11, weight: .medium)
         let fits = tiles.allSatisfy { item in
             item != .timer && item != .calendar
-                && (item.title(l10n) as NSString).size(withAttributes: [.font: font]).width <= room
+                // A name a little too wide still takes one line, drawn smaller.
+                && (item.title(l10n) as NSString).size(withAttributes: [.font: font]).width * NotchActionTile.leastTitleScale <= room
         }
         cache = (key, fits)
         return fits
@@ -173,6 +181,7 @@ extension NotchControlItem {
         case .commandBar: return FeatureStrings.commandBar(l10n.language).pageTitle
         case .scratchpad: return FeatureStrings.scratchpad(l10n.language).pageTitle
         case .markup: return FeatureStrings.notch(l10n.language).markup
+        case .hide: return FeatureStrings.notch(l10n.language).hideActivities
         case .music: return NotchModule.music.title(l10n.language)
         case .timer: return NotchModule.timer.title(l10n.language)
         case .calendar: return NotchModule.calendar.title(l10n.language)
@@ -566,7 +575,10 @@ struct NotchActionTile: View {
     var active = false
     var accent: NotchTileAccent = .selection
     let action: () -> Void
+    /// How far a title shrinks before it wraps or is cut.
+    static let leastTitleScale: CGFloat = 0.85
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.notchOneLineTiles) private var oneLine
     /// Redraws the tile when the Keep Awake color changes in Settings.
     @AppStorage(DefaultsKey.notchKeepAwakeColor) private var keepAwakeColor = ""
     var body: some View {
@@ -578,9 +590,11 @@ struct NotchActionTile: View {
                     .frame(width: 40, height: 40)
                     .background(active ? accent.fill : Color.white.opacity(0.075), in: Circle())
                     .animation(reduceMotion ? nil : .smooth(duration: 0.26), value: symbol)
+                // One line is centered with its icon in the tile; two keep
+                // their full room, the first line level across the row.
                 label
                     .frame(maxWidth: .infinity)
-                    .frame(height: 28, alignment: .top)
+                    .frame(height: oneLine ? nil : 28, alignment: .top)
             }
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity)
@@ -617,8 +631,8 @@ struct NotchActionTile: View {
         } else {
             Text(title).font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white)
-                .lineLimit(2).multilineTextAlignment(.center)
-                .minimumScaleFactor(0.85)
+                .lineLimit(oneLine ? 1 : 2).multilineTextAlignment(.center)
+                .minimumScaleFactor(Self.leastTitleScale)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
