@@ -112,6 +112,10 @@ struct NotchControlsView: View {
             NotchActionTile(symbol: item.symbol, title: item.title(l10n)) {
                 service.perform { ScreenshotService.shared.capture() }
             }
+        case .markup:
+            NotchActionTile(symbol: item.symbol, title: item.title(l10n)) {
+                service.perform { ScreenCaptureService.shared.captureForMarkup() }
+            }
         case .recording: NotchRecorderButton(service: service)
         case .speedTest:
             NotchActionTile(symbol: item.symbol, title: item.title(l10n)) { service.showMetric(.network) }
@@ -145,6 +149,7 @@ extension NotchControlItem {
         case .mixer: return l10n.s.mixerSection
         case .commandBar: return FeatureStrings.commandBar(l10n.language).pageTitle
         case .scratchpad: return FeatureStrings.scratchpad(l10n.language).pageTitle
+        case .markup: return FeatureStrings.notch(l10n.language).markup
         case .music: return NotchModule.music.title(l10n.language)
         case .timer: return NotchModule.timer.title(l10n.language)
         case .calendar: return NotchModule.calendar.title(l10n.language)

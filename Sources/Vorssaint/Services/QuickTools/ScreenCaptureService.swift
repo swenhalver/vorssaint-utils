@@ -173,6 +173,17 @@ final class ScreenCaptureService: ObservableObject {
     /// Opens the same chooser from every feature surface. A feature-specific
     /// button merely picks the initial mode; the person can switch before
     /// selecting anything.
+    /// Set while the island's Markup tile opens capture: the area, window or
+    /// screen taken goes to the markup editor, as the toolbar's Markup does.
+    private var opensForMarkup = false
+
+    /// Opens screenshot capture whose result opens in the markup editor.
+    func captureForMarkup() {
+        opensForMarkup = true
+        defer { opensForMarkup = false }
+        capture(initial: .screenshot)
+    }
+
     func capture(initial preferred: ScreenCaptureTool? = nil, fromShortcut: Bool = false) {
         CaptureTiming.mark("capture(initial:)")
         if preferred == .scrolling, ScreenshotService.shared.finishScrollingCaptureIfActive() { return }
@@ -224,8 +235,10 @@ final class ScreenCaptureService: ObservableObject {
             ? ScreenshotSupport.sanitizedDelay(
                 UserDefaults.standard.integer(forKey: DefaultsKey.screenshotDelay))
             : 0
+        let forMarkup = opensForMarkup
         performAfterDelay(delay, tools: tools) { [weak self] in
-            self?.beginSelection(tools: tools, selected: selected, showsCaptureMenu: showsCaptureMenu)
+            self?.beginSelection(tools: tools, selected: selected, showsCaptureMenu: showsCaptureMenu,
+                                 forMarkup: forMarkup)
         }
     }
 
@@ -259,13 +272,14 @@ final class ScreenCaptureService: ObservableObject {
     }
 
     private func beginSelection(tools: [ScreenCaptureTool], selected: ScreenCaptureTool,
-                               showsCaptureMenu: Bool) {
+                               showsCaptureMenu: Bool, forMarkup: Bool = false) {
         guard selection == nil, !ScreenshotSelectionController.isSessionOnScreen else { return }
         let options = ScreenCaptureSelectionOptions(availableTools: tools,
                                                     selectedTool: selected,
                                                     showsCaptureMenu: showsCaptureMenu,
                                                     controlsInNotch: NotchSupport.routesCaptureControls() && NotchService.shared.acceptsSystemFeedback)
         self.options = options
+        if forMarkup { options.markupRequested = true }
         startSelection(options: options)
     }
 

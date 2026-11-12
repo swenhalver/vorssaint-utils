@@ -2191,7 +2191,10 @@ def main():
                 .replace("DispatchQueue.main.asyncAfter", "Clock.main.asyncAfter")
                 # This fork's timing probe and close-on-repeat are not under test here.
                 .replace('        CaptureTiming.mark("capture(initial:)")\n', "")
-                .replace("            if NSEvent.pressedMouseButtons == 0 { cancelSelection() }\n", ""))
+                .replace("            if NSEvent.pressedMouseButtons == 0 { cancelSelection() }\n", "")
+                # The island's Markup tile is this fork's too.
+                .replace("        let forMarkup = opensForMarkup\n", "")
+                .replace(",\n                                 forMarkup: forMarkup)", ")"))
 
     write("ScreenshotCountdown.swift", "import Foundation\nextension ScreenshotCountdownTests {\n"
           + "final class ScreenCaptureService: ChooserState {\nstatic let shared = ScreenCaptureService()\n"

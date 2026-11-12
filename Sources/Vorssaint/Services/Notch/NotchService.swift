@@ -1965,6 +1965,7 @@ final class NotchService: ObservableObject {
             case .keepAwake: KeepAwakeManager.shared.toggle()
             case .microphone: MicMuteService.shared.toggle()
             case .screenshot: perform { ScreenshotService.shared.capture() }
+            case .markup: perform { ScreenCaptureService.shared.captureForMarkup() }
             case .recording: perform { ScreenRecorderService.shared.toggle() }
             case .speedTest: showMetric(.network)
             case .panel: openAppPanel()

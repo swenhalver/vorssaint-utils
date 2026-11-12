@@ -286,6 +286,10 @@ enum NotchLayout {
     /// The home page's search row keeps this much more below it than other
     /// rows, as much as the top row leaves under its controls.
     static let searchRowExtraGap: CGFloat = 5
+    /// With the search row, the island ends this much sooner: the tiles'
+    /// room for a second label line runs into the bottom margin, which a
+    /// one-line label leaves empty.
+    static let searchHomeTrim: CGFloat = 10
     static let shortcutHeight: CGFloat = 74
     static let shortcutWidth: CGFloat = 76
     static let shortcutSpacing: CGFloat = 8
@@ -1288,8 +1292,8 @@ enum NotchControlSetupRequirement: Equatable {
 }
 
 enum NotchControlItem: String, CaseIterable, Identifiable {
-    case volume, brightness, keyboardLight, music, mixer, keepAwake, timer, calendar, microphone, screenshot, recording, speedTest, panel, commandBar, scratchpad
-    static let defaultHidden = "keyboardLight,microphone,screenshot,recording,speedTest,panel,commandBar,scratchpad"
+    case volume, brightness, keyboardLight, music, mixer, keepAwake, timer, calendar, microphone, screenshot, recording, speedTest, panel, commandBar, markup, scratchpad
+    static let defaultHidden = "keyboardLight,microphone,screenshot,recording,speedTest,panel,commandBar,scratchpad,markup"
     var id: String { rawValue }
 
     /// A level draws as a slider in the card row; everything else is a tile.
@@ -1316,6 +1320,7 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
         case .mixer: return NotchModule.mixer.symbol
         case .commandBar: return "command"
         case .scratchpad: return "note.text"
+        case .markup: return "pencil.tip.crop.circle"
         case .music: return NotchModule.music.symbol
         case .timer: return NotchModule.timer.symbol
         case .calendar: return NotchModule.calendar.symbol
@@ -1328,7 +1333,7 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
         case .brightness, .keyboardLight: return .feature(.brightness)
         case .keepAwake: return .feature(.keepAwake)
         case .microphone: return .feature(.micMute)
-        case .screenshot: return .feature(.screenshot)
+        case .screenshot, .markup: return .feature(.screenshot)
         case .recording: return .feature(.screenRecorder)
         case .commandBar: return .feature(.commandBar)
         case .scratchpad: return .feature(.scratchpad)
@@ -1349,7 +1354,7 @@ enum NotchControlItem: String, CaseIterable, Identifiable {
         case .keyboardLight: return AppFeature.brightness.isAvailable(in: defaults) && Self.keyboardLightIsSupported()
         case .keepAwake: return AppFeature.keepAwake.isAvailable(in: defaults)
         case .microphone: return AppFeature.micMute.isAvailable(in: defaults)
-        case .screenshot: return AppFeature.screenshot.isAvailable(in: defaults)
+        case .screenshot, .markup: return AppFeature.screenshot.isAvailable(in: defaults)
         case .recording: return AppFeature.screenRecorder.isAvailable(in: defaults)
         case .speedTest: return AppFeature.monitorNetwork.isAvailable(in: defaults) && NotchSupport.modules(in: defaults).contains(.system)
         case .commandBar: return AppFeature.commandBar.isAvailable(in: defaults)
@@ -1547,7 +1552,8 @@ enum NotchQuickAccessLayout {
     static let gap: CGFloat = 12
     static let gutter: CGFloat = 72
     static let rowSpacing: CGFloat = 54
-    static let withdrawalDuration = 0.16
+    /// At the chosen animation time, as the island waits for it to close.
+    static var withdrawalDuration: TimeInterval { NotchMotion.scaled(0.16) }
     static let hoverMargin: CGFloat = 16
     static let hoverExitDelay = 0.18
 
@@ -2786,7 +2792,8 @@ struct NotchGeometry: Equatable {
                 let home = NotchLayout.controls(hasCards: controlsHaveMusic, levelRow: levelRow, searchRow: searchRow,
                                                 shortcutCount: max(0, shortcutCount), width: contentWidth, height: room)
                 let empty = !controlsHaveMusic && !searchRow && sliderCount <= 0 && shortcutCount <= 0
-                contentHeight = min(room, empty ? NotchLayout.emptyHeight : home.height)
+                let trim = searchRow && home.shortcutRows > 0 ? NotchLayout.searchHomeTrim : 0
+                contentHeight = min(room, empty ? NotchLayout.emptyHeight : home.height - trim)
             case .music:
                 let player = NotchLayout.musicPlayerHeight(band: musicBandHeight, playing: musicHasContent)
                 // Presets grow for the optional row; a custom height keeps
