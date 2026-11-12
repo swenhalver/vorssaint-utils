@@ -39,6 +39,14 @@ final class CaptureHotspot {
         syncClickMonitors()
     }
 
+    /// Stops both the push and the click, as the app uninstalls itself.
+    func suspend() {
+        opensIsland = false
+        clickCaptures = false
+        stop()
+        syncClickMonitors()
+    }
+
     /// Polled rather than fed by mouse events: event monitors missed hits
     /// while the capture panels held the mouse and arrived seconds late for
     /// some moves. A position read every 30 ms is a few microseconds of work.

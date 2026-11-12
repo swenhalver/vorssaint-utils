@@ -165,7 +165,7 @@ final class ScreenCaptureService: ObservableObject {
     }
 
     func suspend() {
-        CaptureHotspot.shared.sync(enabled: false)
+        CaptureHotspot.shared.suspend()
         toolHotkeys.values.forEach { $0.unregister() }
         cancelSelection()
     }
