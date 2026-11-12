@@ -2732,7 +2732,8 @@ struct NotchGeometry: Equatable {
     /// detail's measured content, which it fits instead of the whole page.
     func expandedSize(module: NotchModule, detail: Bool = false, panel: Bool = false,
                       detailHeight: CGFloat? = nil, shortcutCount: Int = 4,
-                      sliderCount: Int = 2, controlsHaveMusic: Bool = true, musicHasContent: Bool = true,
+                      sliderCount: Int = 2, searchRow: Bool = false,
+                      controlsHaveMusic: Bool = true, musicHasContent: Bool = true,
                       musicShowsVolume: Bool = false,
                       musicExtraHeight: CGFloat = 0,
                       fileMediaHeight: CGFloat? = nil, systemCards: Int = 6, toolCount: Int? = 8,
@@ -2763,11 +2764,11 @@ struct NotchGeometry: Equatable {
                 // from the cards and the rail; a custom height holds them all.
                 let levels = max(0, sliderCount)
                 let band = NotchBand(geometry: self, contentWidth: contentWidth)
-                let levelRow = NotchLayout.bandLevelCount(levels, band: band) < levels
+                let levelRow = searchRow || NotchLayout.bandLevelCount(levels, band: band) < levels
                 let room = budget + (levelRow && layout != .custom ? NotchLayout.levelRowHeight + NotchLayout.rowSpacing : 0)
                 let home = NotchLayout.controls(hasCards: controlsHaveMusic, levelRow: levelRow,
                                                 shortcutCount: max(0, shortcutCount), width: contentWidth, height: room)
-                let empty = !controlsHaveMusic && sliderCount <= 0 && shortcutCount <= 0
+                let empty = !controlsHaveMusic && !searchRow && sliderCount <= 0 && shortcutCount <= 0
                 contentHeight = min(room, empty ? NotchLayout.emptyHeight : home.height)
             case .music:
                 let player = NotchLayout.musicPlayerHeight(band: musicBandHeight, playing: musicHasContent)

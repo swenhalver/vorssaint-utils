@@ -27,6 +27,7 @@ struct ScreenshotCaptureSettings: View {
     @AppStorage(DefaultsKey.screenshotIncludePointer) private var includePointer = false
     @AppStorage(DefaultsKey.screenshotShowLastRegion) private var showLastRegion = true
     @AppStorage(DefaultsKey.screenshotAdjustSelection) private var adjustSelection = false
+    @AppStorage(DefaultsKey.captureTopEdgeClick) private var topEdgeClick = false
     @AppStorage(DefaultsKey.screenshotSmartAreas) private var smartAreas = false
     @AppStorage(DefaultsKey.screenshotHighlightWindows) private var highlightWindows = true
     @AppStorage(DefaultsKey.screenshotLoupeStartsOn) private var loupeStartsOn = false
@@ -153,6 +154,11 @@ struct ScreenshotCaptureSettings: View {
                 if tool != .scrolling {
                     Toggle(strings.pointerToggle, isOn: $includePointer)
                 }
+                Toggle("Click the top of the screen", isOn: $topEdgeClick)
+                    .onChange(of: topEdgeClick) { _, _ in ScreenCaptureService.shared.syncWithPreferences() }
+                Text("Click the middle of any display’s top edge, at the notch, to open the capture toolbar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle("Detect areas inside windows", isOn: $smartAreas)
                 Text("Highlights the part of a window under the pointer, like a sidebar, toolbar or pane, or the page in a browser. Scroll to pick a bigger or smaller part, then click to take it. Uses Accessibility.")
                     .font(.caption)

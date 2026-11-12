@@ -1471,6 +1471,7 @@ def main():
               .replace("private var", "var", 1).replace("NotchSupport.controls()", "controls")
               .replace("NotchTimerService.shared", "NotchCompactTests.NotchTimerService.shared")
               .replace("NotchTimerSupport.savedMode()", "timerMode")
+              .replace("NotchService.homeHasSearch || ", "")
           + declaration("Sources/Vorssaint/UI/Notch/NotchView.swift", "    private var headerFeedback:")
               .replace("private var", "var", 1).replace("NotchSupport.controls()", "controls")
               .replace("BrightnessService.shared.islandSliderShowsFocusedDisplay", "brightnessSlider")

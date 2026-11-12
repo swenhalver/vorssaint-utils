@@ -739,6 +739,7 @@ enum DefaultsKey {
     static let screenshotLastBlurStyle = "screenshotLastBlurStyle"
     static let screenshotLastBlurTextOnly = "screenshotLastBlurTextOnly"
     static let screenshotSpotlightDim = "screenshotSpotlightDim"
+    static let captureTopEdgeClick = "captureTopEdgeClick" // a click in the top-center strip of any display opens capture
     static let screenshotLastArrowStyle = "screenshotLastArrowStyle"
     static let screenshotLastSticker = "screenshotLastSticker"
     static let screenshotAnnotationShadows = "screenshotAnnotationShadows"
@@ -1590,6 +1591,7 @@ enum Defaults {
         DefaultsKey.notchCapsuleFitDrop: 0.0,
         DefaultsKey.notchOpenOnHover: false,
         DefaultsKey.notchTopEdgeOpens: false,
+        DefaultsKey.captureTopEdgeClick: false,
         DefaultsKey.notchShortcutEnabled: false,
         DefaultsKey.notchShortcut: GlobalShortcut.notchDefault.storageValue,
         DefaultsKey.notchHideInFullscreen: false,

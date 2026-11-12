@@ -3,26 +3,40 @@
 
 import AppKit
 
-/// Pushing the pointer into the top-center strip of any display opens the
-/// notch island, and doing it again closes it. Fires once per entry and
-/// never while a button is held, so an area dragged up to the edge does not
-/// cancel itself. 
+/// The top-center strip of every display, at the notch. Pushing the pointer
+/// into it opens the notch island (`notchTopEdgeOpens`); clicking in it opens
+/// the capture toolbar (`captureTopEdgeClick`). Pushing fires once per entry
+/// and never while a button is held, so an area dragged up to the edge does
+/// not cancel itself.
 final class CaptureHotspot {
     static let shared = CaptureHotspot()
 
     /// Virtual displays an agent works on: a hit there first moves the
-    /// pointer to the main display, so the island opens where Swen is.
+    /// pointer to the main display, so what opens shows where Swen is.
     private static let pointerHandoffDisplayNames: Set<String> = ["S-Space"]
 
     private var timer: Timer?
     private var screenObserver: NSObjectProtocol?
+    private var globalClickMonitor: Any?
+    private var localClickMonitor: Any?
     private var regions: [(id: UInt32, rect: CGRect)] = []
     private var activeDisplayID: UInt32?
+    private var opensIsland = false
+    private var clickCaptures = false
+    /// A press that began in the strip; its release there is the click.
+    private var pressedInStrip = false
 
     private init() {}
 
-    func sync(enabled: Bool) {
-        enabled ? start() : stop()
+    /// Reads both switches; the notch and capture services each call this
+    /// when their preferences change.
+    func syncWithPreferences() {
+        let defaults = UserDefaults.standard
+        opensIsland = NotchSupport.isEnabled() && defaults.bool(forKey: DefaultsKey.notchTopEdgeOpens)
+        clickCaptures = !ScreenCaptureTool.available().isEmpty
+            && defaults.bool(forKey: DefaultsKey.captureTopEdgeClick)
+        opensIsland || clickCaptures ? start() : stop()
+        syncClickMonitors()
     }
 
     /// Polled rather than fed by mouse events: event monitors missed hits
@@ -49,6 +63,32 @@ final class CaptureHotspot {
         activeDisplayID = nil
     }
 
+    /// A click is an event, not a position, so it is heard rather than
+    /// polled: globally for other apps' windows and the menu bar, locally
+    /// for the island, where the click is taken so the island does not also
+    /// act on it.
+    private func syncClickMonitors() {
+        if clickCaptures {
+            if globalClickMonitor == nil {
+                globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
+                    let down = event.type == .leftMouseDown
+                    DispatchQueue.main.async { _ = self?.mouse(down: down) }
+                }
+            }
+            if localClickMonitor == nil {
+                localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
+                    self?.mouse(down: event.type == .leftMouseDown) == true ? nil : event
+                }
+            }
+        } else {
+            if let globalClickMonitor { NSEvent.removeMonitor(globalClickMonitor) }
+            if let localClickMonitor { NSEvent.removeMonitor(localClickMonitor) }
+            globalClickMonitor = nil
+            localClickMonitor = nil
+            pressedInStrip = false
+        }
+    }
+
     private func rebuildRegions() {
         let displays = NSScreen.screens.enumerated().map { index, screen -> ScreenshotSupport.HotspotDisplay in
             var left: CGFloat?, right: CGFloat?
@@ -66,17 +106,35 @@ final class CaptureHotspot {
     private func pointerMoved() {
         let hit = ScreenshotSupport.captureHotspotDisplay(containing: NSEvent.mouseLocation, in: regions)
         defer { activeDisplayID = hit }
-        guard let hit, hit != activeDisplayID, NSEvent.pressedMouseButtons == 0 else { return }
-        if let screen = NSScreen.screens.first(where: { Self.displayID(of: $0) == hit }),
-           Self.pointerHandoffDisplayNames.contains(screen.localizedName) {
-            let main = CGDisplayBounds(CGMainDisplayID())
-            if main.width > 0 { CGWarpMouseCursorPosition(CGPoint(x: main.midX, y: main.midY)) }
+        guard opensIsland, let hit, hit != activeDisplayID, NSEvent.pressedMouseButtons == 0 else { return }
+        handOffPointer(from: hit)
+        NotchService.shared.openFromTopEdge()
+    }
+
+    /// True when the press or release belongs to a click in the strip,
+    /// which opens the capture toolbar on release. A click while capture is
+    /// already on screen belongs to it, as an area started at the top edge.
+    private func mouse(down: Bool) -> Bool {
+        let hit = ScreenshotSupport.captureHotspotDisplay(containing: NSEvent.mouseLocation, in: regions)
+        if down {
+            pressedInStrip = clickCaptures && hit != nil && !ScreenshotSelectionController.isSessionOnScreen
+            return pressedInStrip
         }
-        // Hover has already opened the island by the time the pointer reaches
-        // the edge, so there the edge only opens and never closes it again.
-        let notch = NotchService.shared
-        if notch.expanded, UserDefaults.standard.bool(forKey: DefaultsKey.notchOpenOnHover) { return }
-        notch.toggleFromShortcut()
+        guard pressedInStrip else { return false }
+        pressedInStrip = false
+        guard let hit, !ScreenshotSelectionController.isSessionOnScreen else { return true }
+        handOffPointer(from: hit)
+        DispatchQueue.main.async {
+            ScreenCaptureService.shared.capture(initial: .screenshot, fromShortcut: true)
+        }
+        return true
+    }
+
+    private func handOffPointer(from display: UInt32) {
+        guard let screen = NSScreen.screens.first(where: { Self.displayID(of: $0) == display }),
+              Self.pointerHandoffDisplayNames.contains(screen.localizedName) else { return }
+        let main = CGDisplayBounds(CGMainDisplayID())
+        if main.width > 0 { CGWarpMouseCursorPosition(CGPoint(x: main.midX, y: main.midY)) }
     }
 
     private static func displayID(of screen: NSScreen) -> UInt32? {

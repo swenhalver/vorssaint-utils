@@ -13,6 +13,8 @@ struct NotchControlsView: View {
 
     var body: some View {
         let items = NotchSupport.controls()
+        // Swen's island searches from a full row of its own below the top bar.
+        let search = NotchService.homeHasSearch
         let levels = items.filter(\.isLevel)
         // The levels go to the island's top row with no readout: the slider
         // there already shows the level. Beside a camera that cannot split
@@ -21,14 +23,18 @@ struct NotchControlsView: View {
         let bandLevels = Array(levels.prefix(inBand))
         let belowLevels = Array(levels.dropFirst(inBand))
         let shortcuts = items.filter { !$0.isLevel && $0 != .music }
-        let layout = NotchLayout.controls(hasCards: items.contains(.music), levelRow: !belowLevels.isEmpty,
+        let layout = NotchLayout.controls(hasCards: items.contains(.music), levelRow: search || !belowLevels.isEmpty,
                                           shortcutCount: shortcuts.count, width: size.width, height: size.height)
         if items.isEmpty {
             NotchEmptyView(symbol: "slider.horizontal.3", message: FeatureStrings.notch(l10n.language).empty)
         } else {
             VStack(spacing: NotchLayout.rowSpacing) {
                 if layout.levelRow > 0 {
-                    NotchLevelRow(levels: belowLevels) { level($0) }
+                    HStack(spacing: NotchLayout.bandLevelSpacing) {
+                        if search { NotchSearchField().frame(maxWidth: .infinity) }
+                        if !belowLevels.isEmpty { NotchLevelRow(levels: belowLevels) { level($0) } }
+                    }
+                    .frame(height: NotchLayout.levelRowHeight)
                 }
                 if layout.cardRow > 0 {
                     NotchMusicControlsView(notch: service, height: layout.cardRow).frame(height: layout.cardRow)
@@ -51,11 +57,7 @@ struct NotchControlsView: View {
     }
 
     @ViewBuilder private func level(_ item: NotchControlItem) -> some View {
-        if item == .volume, AppFeature.commandBar.isAvailable {
-            // Swen's island searches here instead: the volume keeps its keys,
-            // its on-screen level and the mixer tile.
-            NotchSearchField()
-        } else if item == .volume {
+        if item == .volume {
             NotchAudioControls(notch: service)
         } else if item == .keyboardLight {
             NotchKeyboardLightControls()

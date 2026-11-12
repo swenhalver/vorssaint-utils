@@ -427,6 +427,9 @@ final class NotchService: ObservableObject {
     }
     /// The Command Bar open inside the island, in place of its pages.
     @Published private(set) var showingCommandBar = false
+    /// The home page opens with a search field that opens the Command Bar in
+    /// the island, in a row of its own below the top bar.
+    static var homeHasSearch: Bool { AppFeature.commandBar.isAvailable }
     @Published private var commandBarHeight: CGFloat?
     /// The bar's height as SwiftUI measured it, until the next turn of the main loop.
     private var measuredCommandBarHeight: CGFloat?
@@ -910,7 +913,7 @@ final class NotchService: ObservableObject {
         let shortcuts = controls.filter { !$0.isLevel && $0 != .music }.count
         return geometry.expandedSize(module: module, detail: detail, panel: panel, detailHeight: detailHeight,
                                      shortcutCount: shortcuts,
-                                     sliderCount: sliders, controlsHaveMusic: controls.contains(.music), musicHasContent: NotchMusicService.shared.playback != nil,
+                                     sliderCount: sliders, searchRow: Self.homeHasSearch, controlsHaveMusic: controls.contains(.music), musicHasContent: NotchMusicService.shared.playback != nil,
                                      musicShowsVolume: musicShowsVolume,
                                      musicExtraHeight: musicExtraHeight, fileMediaHeight: fileMediaHeight,
                                      systemCards: NotchSupport.systemCardCount(hasBattery: PowerSampler.hasInternalBattery,
@@ -1186,8 +1189,7 @@ final class NotchService: ObservableObject {
 
     func syncWithPreferences() {
         preferenceSyncWork?.cancel(); preferenceSyncWork = nil
-        CaptureHotspot.shared.sync(enabled: NotchSupport.isEnabled()
-            && UserDefaults.standard.bool(forKey: DefaultsKey.notchTopEdgeOpens))
+        CaptureHotspot.shared.syncWithPreferences()
         guard NotchSupport.isEnabled() else { stop(); return }
         if !running {
             running = true
@@ -1562,6 +1564,22 @@ final class NotchService: ObservableObject {
     }
 
     func toggle() { expanded ? collapse() : open() }
+
+    /// The pointer pushed into the top edge. With hover opening on, the
+    /// island's own display opens it as a hover would, so leaving closes it
+    /// after the closing time and a push on the open island does nothing.
+    /// Otherwise the edge opens and closes it like the shortcut.
+    func openFromTopEdge() {
+        guard acceptsUserInteraction else { return }
+        if hoverOpeningEnabled, NSMouseInRect(NSEvent.mouseLocation, geometry.screen, false) {
+            guard !expanded, !peeking, captureControls == nil, !pinned, !heldDrag else { return }
+            hoverWork?.cancel(); hoverWork = nil
+            removeHoverExitMonitors()
+            open(takeFocus: false)
+            return
+        }
+        toggleFromShortcut()
+    }
 
     /// The island stays on screen, so only a manual resign takes its keyboard.
     /// While Vorssaint stays the active app (its Settings window is open, for
