@@ -572,6 +572,29 @@ final class CommandBarService: ObservableObject {
         hide()
     }
 
+    /// Whether a press right now belongs to a screenshot the bar will be in:
+    /// on the capture surface, which covers every display while an area is
+    /// chosen, or in the strip whose click opens it. With "Hide Vorssaint
+    /// windows" off the bar is something to photograph, and a live capture
+    /// takes its picture only once the area is confirmed, so closing on that
+    /// press left the bar out of it. The island asks the same while the bar
+    /// is open inside it.
+    var pressBelongsToCapture: Bool {
+        if ScreenshotSelectionController.photographsOwnWindows { return true }
+        return !UserDefaults.standard.bool(forKey: DefaultsKey.screenshotHideVorssaintWindows)
+            && CaptureHotspot.shared.opensCapture(at: NSEvent.mouseLocation)
+    }
+
+    /// The capture surface held the keyboard while it was up. A bar left
+    /// open under it takes the keyboard back, so Escape and what is typed
+    /// next reach its field again instead of the app in front.
+    func captureSurfaceDidClose() {
+        guard isVisible, let window = presentation == .island ? islandHost : panel,
+              window.isVisible else { return }
+        window.makeKey()
+        focusField(in: window)
+    }
+
     func hide() {
         // Cleared first, so the island closing under the bar does not close it again.
         let presented = presentation
@@ -3647,7 +3670,7 @@ final class CommandBarService: ObservableObject {
         let mouseEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
             guard let self, let panel, panel.isVisible else { return event }
-            if event.window !== panel, !Self.mouseIsInside(panel) {
+            if event.window !== panel, !Self.mouseIsInside(panel), !self.pressBelongsToCapture {
                 self.hide()
             }
             return event
@@ -3657,7 +3680,8 @@ final class CommandBarService: ObservableObject {
             if event.windowNumber != panel.windowNumber, !Self.mouseIsInside(panel),
                // Every key on the Accessibility Keyboard is a click outside this
                // panel. Dismissing on those makes the panel impossible to type into.
-               !AssistiveKeyboard.ownsCocoaPoint(NSEvent.mouseLocation) {
+               !AssistiveKeyboard.ownsCocoaPoint(NSEvent.mouseLocation),
+               !self.pressBelongsToCapture {
                 self.hide()
             }
         }

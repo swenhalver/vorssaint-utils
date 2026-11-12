@@ -256,6 +256,11 @@ enum CommandBarFeatureTests {
             let alias = CommandBarCandidate(index: 2, title: "Other", keywords: "mydisk", priority: 2_400)
             suite.expect(CommandBarSearch.rankedIndexes(candidates: [exact, alias], matching: "mydisk") == [2],
                          "personal aliases still use the existing ranking path")
+            let midWord = [CommandBarCandidate(index: 0, title: "Screenshot", boost: 400),
+                           CommandBarCandidate(index: 1, title: "EbSynth"),
+                           CommandBarCandidate(index: 2, title: "Turn off Extra brightness")]
+            suite.expect(CommandBarSearch.rankedIndexes(candidates: midWord, matching: "e").last == 0,
+                         "however often it is used, a letter from the middle of a word trails names and words that start with it")
             let before = ranLocalized
             merged[0].run(nil)
             suite.expect(ranLocalized == before + 1, "English metadata retains the localized action closure")

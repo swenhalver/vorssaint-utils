@@ -596,7 +596,7 @@ struct NotchActionTile: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: oneLine ? nil : 28, alignment: .top)
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, oneLine ? NotchLayout.oneLineTileInset : 4)
             .frame(maxWidth: .infinity)
             .frame(height: NotchLayout.shortcutHeight)
             .animation(reduceMotion ? nil : .smooth(duration: 0.26), value: active)

@@ -208,6 +208,16 @@ final class ScreenshotSelectionController {
         return session.panels.contains { $0.windowNumber == windowNumber }
     }
 
+    /// True while a session is up that takes its picture with the app's own
+    /// windows in it. One of them is then something to photograph, and a
+    /// press on the surface, which covers every display, chooses the area
+    /// around it rather than being a click away from it. A session that only
+    /// asks where, or that hides those windows, leaves them to close as ever.
+    static var photographsOwnWindows: Bool {
+        guard let session = activeSession else { return false }
+        return session.activeMode != .geometry && !session.hideVorssaintWindows
+    }
+
     private let strings = FeatureStrings.screenshot(L10n.shared.language)
     /// Named at the head of the hint bar so the surface never leaves the
     /// person guessing what the area they are about to pick is for.

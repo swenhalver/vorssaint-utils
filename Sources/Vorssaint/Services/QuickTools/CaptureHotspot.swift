@@ -119,6 +119,13 @@ final class CaptureHotspot {
         NotchService.shared.openFromTopEdge()
     }
 
+    /// Whether a press at `point` lands in the strip while its click opens
+    /// the capture toolbar. Whoever closes on a click away asks first, since
+    /// that press starts a capture instead.
+    func opensCapture(at point: CGPoint) -> Bool {
+        clickCaptures && ScreenshotSupport.captureHotspotDisplay(containing: point, in: regions) != nil
+    }
+
     /// True when the press or release belongs to a click in the strip,
     /// which on release opens the capture toolbar, or closes it when it is
     /// already open. Both halves are taken, so an open capture never treats

@@ -345,6 +345,9 @@ final class ScreenCaptureService: ObservableObject {
             guard let self, let controller, let options,
                   self.selection === controller else { return }
             NotchService.shared.endCaptureControls()
+            // The surface held the keyboard, and a Command Bar that stayed
+            // open to be in the picture takes it back.
+            CommandBarService.shared.captureSurfaceDidClose()
             options.onPresentationReady = nil
             options.onCaptureControlsSurfaceChange = nil
             self.selection = nil

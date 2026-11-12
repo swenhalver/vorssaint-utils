@@ -299,15 +299,18 @@ enum NotchLayout {
     /// own height, and their rail rises this far so the icons stay where
     /// they were: half the room a second line would have taken.
     static let oneLineTileRise: CGFloat = 7.5
+    /// A one-line name runs nearly the width of its tile before it shrinks.
+    static let oneLineTileInset: CGFloat = 1
 
-    /// How wide a home tile's label may run: its cell, wider than the tile
-    /// where the rail spreads to fill the row, less the tile's side padding.
+    /// How wide a home tile's one-line label may run: its cell, wider than
+    /// the tile where the rail spreads to fill the row, less a hairline at
+    /// each side.
     static func shortcutLabelRoom(count: Int, rows: Int, width: CGFloat) -> CGFloat {
         let columns = railColumns(count: count, rows: rows)
         let gap = railGap(columns: columns, itemWidth: shortcutWidth, spacing: shortcutSpacing,
                           least: shortcutLeastSpacing, width: width)
         let cell = gap.map { (width - CGFloat(max(0, columns - 1)) * $0) / CGFloat(max(1, columns)) } ?? shortcutWidth
-        return cell - 8
+        return cell - 2 * oneLineTileInset
     }
     static let shortcutHeight: CGFloat = 74
     static let shortcutWidth: CGFloat = 76

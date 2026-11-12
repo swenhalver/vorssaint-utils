@@ -255,6 +255,10 @@ final class NotchService: ObservableObject {
             || (expanded && !showingSections && selected == .files && fileInteractionActive)
             || CameraPreviewService.shared.keepsNotchPermissionPrompt
             || (expanded && !showingSections && selected == .tools && (QuickLauncherService.shared.activeUtility != nil || QuickLauncherService.shared.isEditing))
+            // A screenshot that shows the app's windows has the bar inside
+            // the island as its subject: a press that starts it or draws its
+            // area is not a click away.
+            || (expanded && showingCommandBar && CommandBarService.shared.pressBelongsToCapture)
     }
     private var showsCapturePreview: Bool {
         expanded && !showingSections && selected == .captures && captureContent != nil
@@ -583,8 +587,9 @@ final class NotchService: ObservableObject {
         (inside || activityPickerMenuOpen) && !hiddenInFullscreen && !hiddenUntilHover && !expanded && !peeking
             && !dragPlaceholder && notice == nil && captureControls == nil
             // Hide is always on hand, unless hovering opens the island:
-            // then only competing activities, or a hidden island, show it.
-            && (islandHidden || compactActivities.count > 1 || !hoverOpeningEnabled)
+            // then only competing activities show it, and a hidden island
+            // opens like any other, with Hide among its home buttons.
+            && (compactActivities.count > 1 || !hoverOpeningEnabled)
     }
 
     var compactActivityPickerLayout: NotchActivityPickerLayout {
@@ -632,9 +637,9 @@ final class NotchService: ObservableObject {
     }
 
     /// The picker's Hide: the closed island shows nothing, no activity,
-    /// resting content or notice, while everything keeps running. Hovering
-    /// the notch still brings the picker, where Hide again or any activity
-    /// shows the island again.
+    /// resting content or notice, while everything keeps running. Hide again
+    /// shows it: from the picker, which hovering still brings where hovering
+    /// does not open the island, or from the home page's own Hide button.
     func toggleIslandHidden() {
         hoverWork?.cancel(); hoverWork = nil
         switchCompactSelection { islandHidden.toggle() }

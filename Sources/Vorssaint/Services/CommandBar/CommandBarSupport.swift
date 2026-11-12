@@ -392,10 +392,11 @@ enum CommandBarSearch {
                 let tier = matchTier(title: candidate.normalizedTitle,
                                      keywords: candidate.normalizedKeywords,
                                      query: normalizedQuery)
-                // A title that starts with the query and one that holds it
-                // share a tier, so what the person picks most often can lead
-                // between them; an exact title still always wins.
-                return (candidate.index, candidate.priority, candidate.demoted, tier == 4 ? 3 : tier,
+                // A title that starts with the query and one with a word
+                // that does share a tier, so what the person picks most often
+                // can lead between them; an exact title still always wins,
+                // and letters from the middle of a word never lead either.
+                return (candidate.index, candidate.priority, candidate.demoted, tier == 5 ? 4 : tier,
                         base + candidate.boost, position)
             }
         return scored
@@ -458,11 +459,24 @@ enum CommandBarSearch {
     /// source preference. Explicit aliases and learned query choices arrive as
     /// priority instead, because they record what the person actually meant.
     private static func matchTier(title: String, keywords: String, query: String) -> Int {
-        if title == query { return 5 }
-        if title.hasPrefix(query) { return 4 }
-        if title.contains(query) { return 3 }
+        if title == query { return 6 }
+        if title.hasPrefix(query) { return 5 }
+        if title.contains(query) { return startsWord(query, in: title) ? 4 : 3 }
         if !keywords.isEmpty, keywords.contains(query) { return 2 }
         return 1
+    }
+
+    /// Whether `query` begins a word of `title`, which holds it: "e" begins
+    /// one in "Turn off Extra brightness" and none in "Screenshot".
+    private static func startsWord(_ query: String, in title: String) -> Bool {
+        var from = title.startIndex
+        while let match = title.range(of: query, range: from..<title.endIndex) {
+            guard match.lowerBound > title.startIndex else { return true }
+            let before = title[title.index(before: match.lowerBound)]
+            if !before.isLetter && !before.isNumber { return true }
+            from = title.index(after: match.lowerBound)
+        }
+        return false
     }
 
     private static func bestTokenScore(_ token: QueryToken, in words: [Substring],
