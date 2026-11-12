@@ -137,6 +137,26 @@ struct NotchControlsView: View {
     }
 }
 
+/// Whether the home page's tiles all name themselves in one line. A timer
+/// or calendar tile can put a reading above its name, so it counts as two.
+enum NotchHomeLabels {
+    private static var cache: (key: String, fits: Bool)?
+
+    static func fitOneLine(in room: CGFloat) -> Bool {
+        let l10n = L10n.shared
+        let tiles = NotchSupport.controls().filter { !$0.isLevel && $0 != .music }
+        let key = "\(l10n.language.rawValue):\(Int(room * 2)):" + tiles.map(\.rawValue).joined(separator: ",")
+        if let cache, cache.key == key { return cache.fits }
+        let font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        let fits = tiles.allSatisfy { item in
+            item != .timer && item != .calendar
+                && (item.title(l10n) as NSString).size(withAttributes: [.font: font]).width <= room
+        }
+        cache = (key, fits)
+        return fits
+    }
+}
+
 extension NotchControlItem {
     func title(_ l10n: L10n) -> String {
         switch self {

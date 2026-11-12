@@ -290,6 +290,21 @@ enum NotchLayout {
     /// room for a second label line runs into the bottom margin, which a
     /// one-line label leaves empty.
     static let searchHomeTrim: CGFloat = 10
+    /// Whether every tile on the home page keeps to one line under its
+    /// icon, in a label this wide. Only the views can measure a label, so
+    /// launch points this at them; a tile that needs its second line keeps
+    /// the island's full height.
+    static var tilesFitOneLine: (CGFloat) -> Bool = { _ in true }
+
+    /// How wide a home tile's label may run: its cell, wider than the tile
+    /// where the rail spreads to fill the row, less the tile's side padding.
+    static func shortcutLabelRoom(count: Int, rows: Int, width: CGFloat) -> CGFloat {
+        let columns = railColumns(count: count, rows: rows)
+        let gap = railGap(columns: columns, itemWidth: shortcutWidth, spacing: shortcutSpacing,
+                          least: shortcutLeastSpacing, width: width)
+        let cell = gap.map { (width - CGFloat(max(0, columns - 1)) * $0) / CGFloat(max(1, columns)) } ?? shortcutWidth
+        return cell - 8
+    }
     static let shortcutHeight: CGFloat = 74
     static let shortcutWidth: CGFloat = 76
     static let shortcutSpacing: CGFloat = 8
@@ -635,7 +650,9 @@ enum NotchLayout {
         let rail = rows > 0 ? railHeight(rows: rows, rowHeight: shortcutHeight, spacing: rowGap) + rowSpacing : 0
         let cardRow = hasCards ? min(cardHeight, max(minimumCardHeight, budget - rail)) : 0
         return NotchControlsLayout(levelRow: levels, cardRow: cardRow, shortcutRows: rows, shortcutRowSpacing: rowGap,
-                                   bottomTrim: searchRow && rows > 0 ? searchHomeTrim : 0)
+                                   bottomTrim: searchRow && rows > 0
+                                    && tilesFitOneLine(shortcutLabelRoom(count: shortcutCount, rows: rows, width: width))
+                                    ? searchHomeTrim : 0)
     }
 
     /// The modes and Start are in the island's top row, so setup is the

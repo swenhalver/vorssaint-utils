@@ -13,6 +13,7 @@ SuperKeyMappingGuard.runIfRequestedAndExit()
 Defaults.register()
 let configuredFeatureKeys = SettingsBackup.applyConfigFileAtLaunch()
 NotchControlItem.keyboardLightIsSupported = { BrightnessService.keyboardLightIsSupported }
+NotchLayout.tilesFitOneLine = { NotchHomeLabels.fitOneLine(in: $0) }
 MouseAccelerationGuard.runIfRequestedAndExit()
 MouseAccelerationService.recoverPendingAtLaunch()
 
