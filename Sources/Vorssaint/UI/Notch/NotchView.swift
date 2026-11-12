@@ -480,6 +480,7 @@ struct NotchView: View {
             size.height = max(size.height, NotchLayout.controls(
                 hasCards: items.contains(.music),
                 levelRow: NotchService.homeHasSearch || NotchLayout.bandLevelCount(levels, band: band) < levels,
+                searchRow: NotchService.homeHasSearch,
                 shortcutCount: shortcuts.count, width: size.width, height: size.height).height)
         case .timer:
             let session = NotchTimerService.shared.session

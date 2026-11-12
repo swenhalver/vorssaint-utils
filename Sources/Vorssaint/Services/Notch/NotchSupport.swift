@@ -283,6 +283,9 @@ enum NotchLayout {
     static let bandLevelSpacing: CGFloat = 12
     /// The row below a camera's for the levels its sides have no room for.
     static let levelRowHeight: CGFloat = 28
+    /// The home page's search row keeps this much more below it than other
+    /// rows, as much as the top row leaves under its controls.
+    static let searchRowExtraGap: CGFloat = 5
     static let shortcutHeight: CGFloat = 74
     static let shortcutWidth: CGFloat = 76
     static let shortcutSpacing: CGFloat = 8
@@ -603,9 +606,9 @@ enum NotchLayout {
     /// player's card and a rail of shortcuts. A tight budget shortens the
     /// card, then closes the rows of a rail that would scroll, before it
     /// drops a row.
-    static func controls(hasCards: Bool, levelRow: Bool = false, shortcutCount: Int,
+    static func controls(hasCards: Bool, levelRow: Bool = false, searchRow: Bool = false, shortcutCount: Int,
                          width: CGFloat, height: CGFloat) -> NotchControlsLayout {
-        let levels = levelRow ? levelRowHeight : 0
+        let levels = searchRow ? levelRowHeight + searchRowExtraGap : levelRow ? levelRowHeight : 0
         guard hasCards || shortcutCount > 0 else { return NotchControlsLayout(levelRow: levels, cardRow: 0, shortcutRows: 0) }
         let budget = height - (levels > 0 ? levels + rowSpacing : 0)
         var rows = 0, rowGap = shortcutSpacing
@@ -1684,7 +1687,7 @@ enum NotchSupport {
     /// An unset value keeps the old pause rather than reading as zero.
     /// How long the island's opening takes, as the time of its widening.
     static let defaultAnimationTime = 0.44
-    static let animationTimeRange = 0.10...1.0
+    static let animationTimeRange = 0.0...1.0
 
     static func sanitizedAnimationTime(_ value: TimeInterval) -> TimeInterval {
         value.isFinite ? min(animationTimeRange.upperBound, max(animationTimeRange.lowerBound, value)) : defaultAnimationTime
@@ -2778,8 +2781,9 @@ struct NotchGeometry: Equatable {
                 let levels = max(0, sliderCount)
                 let band = NotchBand(geometry: self, contentWidth: contentWidth)
                 let levelRow = searchRow || NotchLayout.bandLevelCount(levels, band: band) < levels
-                let room = budget + (levelRow && layout != .custom ? NotchLayout.levelRowHeight + NotchLayout.rowSpacing : 0)
-                let home = NotchLayout.controls(hasCards: controlsHaveMusic, levelRow: levelRow,
+                let rowHeight = NotchLayout.levelRowHeight + (searchRow ? NotchLayout.searchRowExtraGap : 0)
+                let room = budget + (levelRow && layout != .custom ? rowHeight + NotchLayout.rowSpacing : 0)
+                let home = NotchLayout.controls(hasCards: controlsHaveMusic, levelRow: levelRow, searchRow: searchRow,
                                                 shortcutCount: max(0, shortcutCount), width: contentWidth, height: room)
                 let empty = !controlsHaveMusic && !searchRow && sliderCount <= 0 && shortcutCount <= 0
                 contentHeight = min(room, empty ? NotchLayout.emptyHeight : home.height)
@@ -2919,10 +2923,14 @@ enum NotchMotion {
     /// The chosen animation time as a share of the standard one; every
     /// opening and closing spring, and the content fading with it, scales by it.
     static var timeScale: Double = 1
-    static var growingWidth: Spring { Spring(duration: 0.44 * timeScale, bounce: 0.25) }
-    static var growingHeight: Spring { Spring(duration: 0.38 * timeScale, bounce: 0.22) }
-    static var shrinkingWidth: Spring { Spring(duration: 0.30 * timeScale, bounce: 0) }
-    static var shrinkingHeight: Spring { Spring(duration: 0.26 * timeScale, bounce: 0) }
+    static var growingWidth: Spring { Spring(duration: scaled(0.44), bounce: 0.25) }
+    static var growingHeight: Spring { Spring(duration: scaled(0.38), bounce: 0.22) }
+    static var shrinkingWidth: Spring { Spring(duration: scaled(0.30), bounce: 0) }
+    static var shrinkingHeight: Spring { Spring(duration: scaled(0.26), bounce: 0) }
+    /// A standard time at the chosen animation time. Zero means instant, a
+    /// frame's worth: a spring needs some duration, and Core Animation reads
+    /// a zero duration as its own default.
+    static func scaled(_ time: TimeInterval) -> TimeInterval { max(0.004, time * timeScale) }
     /// How long the motion model follows a spring before calling it settled.
     private static var horizon: TimeInterval { 2 * max(1, timeScale) }
     /// A strip that stays on screen and only fits a new reading, as a level

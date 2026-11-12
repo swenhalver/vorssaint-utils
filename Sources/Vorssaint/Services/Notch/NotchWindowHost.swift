@@ -1593,7 +1593,7 @@ private final class NotchCanvas: NSView {
             contentVisibility.opacity = 1
             let transition = CATransition()
             transition.type = .fade
-            transition.duration = 0.18 * NotchMotion.timeScale
+            transition.duration = NotchMotion.scaled(0.18)
             transition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             host.layer?.add(transition, forKey: kCATransition)
         } else {
@@ -1607,7 +1607,7 @@ private final class NotchCanvas: NSView {
             // opacity already on screen. A shape that snaps into place only
             // needs its first frames drawn.
             let keyTimes: [NSNumber] = kind == .dismiss ? [0, 0.65, 1] : shapeSnaps ? [0, 0.25, 1] : [0, 0.35, 1]
-            let duration: CFTimeInterval = (kind == .dismiss ? 0.40 : shapeSnaps ? 0.2 : 0.45) * NotchMotion.timeScale
+            let duration: CFTimeInterval = NotchMotion.scaled(kind == .dismiss ? 0.40 : shapeSnaps ? 0.2 : 0.45)
             animation.values = [start, start, 1]
             animation.keyTimes = keyTimes
             animation.duration = duration

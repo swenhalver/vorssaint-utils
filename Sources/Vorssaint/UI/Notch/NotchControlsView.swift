@@ -23,7 +23,7 @@ struct NotchControlsView: View {
         let bandLevels = Array(levels.prefix(inBand))
         let belowLevels = Array(levels.dropFirst(inBand))
         let shortcuts = items.filter { !$0.isLevel && $0 != .music }
-        let layout = NotchLayout.controls(hasCards: items.contains(.music), levelRow: search || !belowLevels.isEmpty,
+        let layout = NotchLayout.controls(hasCards: items.contains(.music), levelRow: search || !belowLevels.isEmpty, searchRow: search,
                                           shortcutCount: shortcuts.count, width: size.width, height: size.height)
         if items.isEmpty {
             NotchEmptyView(symbol: "slider.horizontal.3", message: FeatureStrings.notch(l10n.language).empty)
@@ -31,10 +31,17 @@ struct NotchControlsView: View {
             VStack(spacing: NotchLayout.rowSpacing) {
                 if layout.levelRow > 0 {
                     HStack(spacing: NotchLayout.bandLevelSpacing) {
-                        if search { NotchSearchField().frame(maxWidth: .infinity) }
+                        if search {
+                            // Grown up into the gap below the top row, so it
+                            // fills that strip and the rows below stay put.
+                            NotchSearchField(height: NotchLayout.levelRowHeight + NotchSearchField.lift)
+                                .padding(.top, -NotchSearchField.lift)
+                                .frame(maxWidth: .infinity)
+                        }
                         if !belowLevels.isEmpty { NotchLevelRow(levels: belowLevels) { level($0) } }
                     }
                     .frame(height: NotchLayout.levelRowHeight)
+                    .frame(height: layout.levelRow, alignment: .top)
                 }
                 if layout.cardRow > 0 {
                     NotchMusicControlsView(notch: service, height: layout.cardRow).frame(height: layout.cardRow)
@@ -148,6 +155,10 @@ extension NotchControlItem {
 /// Looks like a search field and opens the Command Bar inside the island,
 /// where its real field takes the keyboard.
 struct NotchSearchField: View {
+    /// All of the gap above the page but a sliver, which keeps the field
+    /// apart from the top row's controls.
+    static let lift = NotchLayout.spacing - 2
+    var height: CGFloat = 28
     @ObservedObject private var l10n = L10n.shared
 
     var body: some View {
@@ -157,18 +168,18 @@ struct NotchSearchField: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text(placeholder)
-                    .font(.system(size: 12))
+                    .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
-            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
+            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(placeholder)
