@@ -198,7 +198,7 @@ enum CaptureToolbarTests {
         let unnotched = ScreenshotSupport.captureHotspotRegions(for: [external])
         suite.expect(unnotched.first?.rect.width == ScreenshotSupport.captureHotspotFallbackWidth,
                      "without any notch the strip has a fixed width")
-        suite.expect(Defaults.registeredDefaults[DefaultsKey.captureHotspotEnabled] as? Bool == false,
+        suite.expect(Defaults.registeredDefaults[DefaultsKey.notchTopEdgeOpens] as? Bool == false,
                      "the hotspot ships off")
 
         // MARK: Clipboard only

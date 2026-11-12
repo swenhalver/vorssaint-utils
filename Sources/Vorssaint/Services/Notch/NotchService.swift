@@ -1186,6 +1186,8 @@ final class NotchService: ObservableObject {
 
     func syncWithPreferences() {
         preferenceSyncWork?.cancel(); preferenceSyncWork = nil
+        CaptureHotspot.shared.sync(enabled: NotchSupport.isEnabled()
+            && UserDefaults.standard.bool(forKey: DefaultsKey.notchTopEdgeOpens))
         guard NotchSupport.isEnabled() else { stop(); return }
         if !running {
             running = true

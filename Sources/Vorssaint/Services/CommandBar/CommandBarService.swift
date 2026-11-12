@@ -236,6 +236,9 @@ final class CommandBarService: ObservableObject {
     private var panelScreen: NSRect?
     /// The island's panel while the bar is open inside it.
     private weak var islandHost: NSPanel?
+    /// Set for one opening from the island's own search field, which opens
+    /// the bar in place whatever style is chosen.
+    private var opensInIsland = false
     /// Where the drop leaves the island, read as the bar takes the keyboard.
     private var dropSource: CGRect?
     /// Keys typed before the field was drawn, kept in order for it.
@@ -343,6 +346,13 @@ final class CommandBarService: ObservableObject {
         show(promptingFor: nil)
     }
 
+    /// Opens the bar inside the island, as the island's search field does.
+    func showInIsland() {
+        opensInIsland = true
+        defer { opensInIsland = false }
+        show(promptingFor: nil)
+    }
+
     private func show(promptingFor stableKey: String?) {
         guard AppFeature.commandBar.isAvailable else { return }
         let panel = ensurePanel()
@@ -440,7 +450,7 @@ final class CommandBarService: ObservableObject {
     private func claimKeyboard(with panel: NSPanel) {
         CommandBarDroplet.shared.cancel()
         dropSource = nil
-        let style = NotchMascotSupport.commandBarStyle()
+        let style = opensInIsland ? .island : NotchMascotSupport.commandBarStyle()
         if style == .island, let host = NotchService.shared.presentCommandBar() {
             islandHost = host
             presentation = .island

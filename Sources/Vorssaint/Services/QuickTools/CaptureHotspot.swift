@@ -4,14 +4,14 @@
 import AppKit
 
 /// Pushing the pointer into the top-center strip of any display opens the
-/// capture toolbar, and doing it again closes it. Fires once per entry and
+/// notch island, and doing it again closes it. Fires once per entry and
 /// never while a button is held, so an area dragged up to the edge does not
 /// cancel itself. 
 final class CaptureHotspot {
     static let shared = CaptureHotspot()
 
     /// Virtual displays an agent works on: a hit there first moves the
-    /// pointer to the main display, so the toolbar opens where Swen is.
+    /// pointer to the main display, so the island opens where Swen is.
     private static let pointerHandoffDisplayNames: Set<String> = ["S-Space"]
 
     private var timer: Timer?
@@ -67,13 +67,16 @@ final class CaptureHotspot {
         let hit = ScreenshotSupport.captureHotspotDisplay(containing: NSEvent.mouseLocation, in: regions)
         defer { activeDisplayID = hit }
         guard let hit, hit != activeDisplayID, NSEvent.pressedMouseButtons == 0 else { return }
-        CaptureTiming.start("hotspot hit")
         if let screen = NSScreen.screens.first(where: { Self.displayID(of: $0) == hit }),
            Self.pointerHandoffDisplayNames.contains(screen.localizedName) {
             let main = CGDisplayBounds(CGMainDisplayID())
             if main.width > 0 { CGWarpMouseCursorPosition(CGPoint(x: main.midX, y: main.midY)) }
         }
-        ScreenCaptureService.shared.capture(initial: .screenshot, fromShortcut: true)
+        // Hover has already opened the island by the time the pointer reaches
+        // the edge, so there the edge only opens and never closes it again.
+        let notch = NotchService.shared
+        if notch.expanded, UserDefaults.standard.bool(forKey: DefaultsKey.notchOpenOnHover) { return }
+        notch.toggleFromShortcut()
     }
 
     private static func displayID(of screen: NSScreen) -> UInt32? {

@@ -2077,17 +2077,17 @@ enum NotchTests {
                      "the island matches the physical notch's height unless covering the gap below it is chosen")
         suite.expect(defaults.double(forKey: DefaultsKey.notchHoverDelay) == 0.25,
                "hover activation defaults to a deliberate quarter-second pause")
-        for value in [0.10, 0.25, 0.65, 1.0] {
+        for value in [0.0, 0.10, 0.25, 0.65, 1.0] {
             suite.expect(NotchSupport.sanitizedHoverDelay(value) == value, "valid hover activation times are preserved")
         }
-        suite.expect(NotchSupport.sanitizedHoverDelay(-1) == 0.10
+        suite.expect(NotchSupport.sanitizedHoverDelay(-1) == 0.0
                && NotchSupport.sanitizedHoverDelay(9) == 1.0,
                "hover activation times stay within usable bounds")
         suite.expect([Double.nan, .infinity, -.infinity].allSatisfy { NotchSupport.sanitizedHoverDelay($0) == 0.25 },
                "non-finite hover activation times fall back to the default")
         suite.expect(defaults.double(forKey: DefaultsKey.notchCloseDelay) == 0.18
                && NotchSupport.sanitizedCloseDelay(0.65) == 0.65
-               && NotchSupport.sanitizedCloseDelay(-1) == 0.10 && NotchSupport.sanitizedCloseDelay(9) == 2.0
+               && NotchSupport.sanitizedCloseDelay(-1) == 0.0 && NotchSupport.sanitizedCloseDelay(9) == 2.0
                && NotchSupport.sanitizedCloseDelay(.nan) == 0.18,
                "closing after the pointer leaves keeps its old pause and stays within usable bounds")
         defaults.set(1.5, forKey: DefaultsKey.notchCloseDelay)

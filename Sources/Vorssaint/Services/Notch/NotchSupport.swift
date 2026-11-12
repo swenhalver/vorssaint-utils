@@ -1661,7 +1661,7 @@ enum NotchSupport {
 
     static let toolColumns = 5
     static let defaultHoverDelay = 0.25
-    static let hoverDelayRange = 0.10...1.0
+    static let hoverDelayRange = 0.0...1.0
 
     /// Whether a screen point lies in a top-edge click area, whose top edge
     /// belongs to it as in the flipped native view.
@@ -1675,7 +1675,7 @@ enum NotchSupport {
 
     /// How long an island opened by hover waits after the pointer leaves.
     static let defaultCloseDelay = NotchQuickAccessLayout.hoverExitDelay
-    static let closeDelayRange = 0.10...2.0
+    static let closeDelayRange = 0.0...2.0
 
     static func sanitizedCloseDelay(_ value: TimeInterval) -> TimeInterval {
         value.isFinite ? min(closeDelayRange.upperBound, max(closeDelayRange.lowerBound, value)) : defaultCloseDelay

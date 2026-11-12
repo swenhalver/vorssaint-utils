@@ -51,7 +51,11 @@ struct NotchControlsView: View {
     }
 
     @ViewBuilder private func level(_ item: NotchControlItem) -> some View {
-        if item == .volume {
+        if item == .volume, AppFeature.commandBar.isAvailable {
+            // Swen's island searches here instead: the volume keeps its keys,
+            // its on-screen level and the mixer tile.
+            NotchSearchField()
+        } else if item == .volume {
             NotchAudioControls(notch: service)
         } else if item == .keyboardLight {
             NotchKeyboardLightControls()
@@ -136,6 +140,36 @@ extension NotchControlItem {
         case .timer: return NotchModule.timer.title(l10n.language)
         case .calendar: return NotchModule.calendar.title(l10n.language)
         }
+    }
+}
+
+/// Looks like a search field and opens the Command Bar inside the island,
+/// where its real field takes the keyboard.
+struct NotchSearchField: View {
+    @ObservedObject private var l10n = L10n.shared
+
+    var body: some View {
+        let placeholder = FeatureStrings.commandBar(l10n.language).searchPlaceholder
+        Button {
+            CommandBarService.shared.showInIsland()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(placeholder)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(placeholder)
     }
 }
 

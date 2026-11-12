@@ -41,6 +41,7 @@ struct NotchSettings: View {
     @AppStorage(DefaultsKey.notchDisplay) private var display = NotchDisplay.automatic.rawValue
     @AppStorage(DefaultsKey.notchSilhouette) private var silhouette = NotchSilhouette.capsule.rawValue
     @AppStorage(DefaultsKey.notchOpenOnHover) private var hover = false
+    @AppStorage(DefaultsKey.notchTopEdgeOpens) private var topEdgeOpens = false
     @AppStorage(DefaultsKey.notchShortcutEnabled) private var shortcutEnabled = false
     @AppStorage(DefaultsKey.notchHideInFullscreen) private var hideInFullscreen = false
     @AppStorage(DefaultsKey.notchHoverInFullscreen) private var hoverInFullscreen = false
@@ -697,6 +698,9 @@ struct NotchSettings: View {
                     hoverDelayControl
                     if hoverExpand { closeDelayControl }
                 }
+                switchRow("arrow.up.to.line", text.topEdgeOpen, caption: topEdgeOpens ? text.topEdgeOpenHint : nil,
+                          isOn: $topEdgeOpens)
+                    .onChange(of: topEdgeOpens) { _, _ in NotchService.shared.syncWithPreferences() }
                 switchRow("keyboard", l10n.s.quickToolShortcutToggle, isOn: $shortcutEnabled)
                 if shortcutEnabled {
                     ShortcutPreferenceRow(role: .notch) {

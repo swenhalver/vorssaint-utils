@@ -722,7 +722,6 @@ enum DefaultsKey {
     static let screenshotShowLastRegion = "screenshotShowLastRegion"
     static let screenshotSmartAreas = "screenshotSmartAreas" // highlight the part of a window under the pointer
     static let screenshotAdjustSelection = "screenshotAdjustSelection" // open on the last area and wait for a button to capture
-    static let captureHotspotEnabled = "captureHotspotEnabled" // the top-center strip of every display opens and closes capture
     static let screenshotLastRegion = "screenshotLastRegion" // "displayID x y width height" of the last captured area
     static let screenshotHighlightWindows = "screenshotHighlightWindows"
     static let screenshotLoupeStartsOn = "screenshotLoupeStartsOn"
@@ -967,6 +966,7 @@ enum DefaultsKey {
     static let notchCapsuleFitHeight = "notchCapsuleFitHeight"
     static let notchCapsuleFitDrop = "notchCapsuleFitDrop"
     static let notchOpenOnHover = "notchOpenOnHover"
+    static let notchTopEdgeOpens = "notchTopEdgeOpens" // the top-center strip of every display opens and closes the island
     static let notchShortcutEnabled = "notchShortcutEnabled"
     static let notchShortcut = "notchShortcut"
     static let notchHideInFullscreen = "notchHideInFullscreen"
@@ -1589,6 +1589,7 @@ enum Defaults {
         DefaultsKey.notchCapsuleFitHeight: 0.0,
         DefaultsKey.notchCapsuleFitDrop: 0.0,
         DefaultsKey.notchOpenOnHover: false,
+        DefaultsKey.notchTopEdgeOpens: false,
         DefaultsKey.notchShortcutEnabled: false,
         DefaultsKey.notchShortcut: GlobalShortcut.notchDefault.storageValue,
         DefaultsKey.notchHideInFullscreen: false,
@@ -1994,7 +1995,6 @@ enum Defaults {
         DefaultsKey.screenshotShowLastRegion: true,
         DefaultsKey.screenshotAdjustSelection: false,
         DefaultsKey.screenshotSmartAreas: false,
-        DefaultsKey.captureHotspotEnabled: false,
         DefaultsKey.screenshotHighlightWindows: true,
         DefaultsKey.screenshotLoupeStartsOn: false,
         DefaultsKey.screenshotLoupeRememberZoom: false,

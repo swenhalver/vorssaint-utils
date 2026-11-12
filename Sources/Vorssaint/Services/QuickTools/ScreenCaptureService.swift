@@ -132,8 +132,6 @@ final class ScreenCaptureService: ObservableObject {
 
     func syncWithPreferences() {
         let availableTools = ScreenCaptureTool.available()
-        CaptureHotspot.shared.sync(enabled: !availableTools.isEmpty
-            && UserDefaults.standard.bool(forKey: DefaultsKey.captureHotspotEnabled))
         guard !availableTools.isEmpty else {
             toolShortcutRegistrationFailures = []
             toolHotkeys.values.forEach { $0.unregister() }
