@@ -54,6 +54,9 @@ struct NotchControlsView: View {
                     }
                 }
             }
+            // The last tiles keep their height and run that far past the
+            // page's end, into the island's bottom margin.
+            .padding(.bottom, -layout.bottomTrim)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .notchBand(leading: {
                 NotchBandLevels(band: band, levels: bandLevels, side: .leading) { level($0) }

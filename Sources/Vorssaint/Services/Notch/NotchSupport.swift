@@ -634,7 +634,8 @@ enum NotchLayout {
         }
         let rail = rows > 0 ? railHeight(rows: rows, rowHeight: shortcutHeight, spacing: rowGap) + rowSpacing : 0
         let cardRow = hasCards ? min(cardHeight, max(minimumCardHeight, budget - rail)) : 0
-        return NotchControlsLayout(levelRow: levels, cardRow: cardRow, shortcutRows: rows, shortcutRowSpacing: rowGap)
+        return NotchControlsLayout(levelRow: levels, cardRow: cardRow, shortcutRows: rows, shortcutRowSpacing: rowGap,
+                                   bottomTrim: searchRow && rows > 0 ? searchHomeTrim : 0)
     }
 
     /// The modes and Start are in the island's top row, so setup is the
@@ -706,8 +707,13 @@ struct NotchControlsLayout: Equatable {
     let cardRow: CGFloat
     let shortcutRows: Int
     var shortcutRowSpacing = NotchLayout.shortcutSpacing
+    /// How much of the last tiles' room for a second label line the page
+    /// gives up; the page and what it draws are both this much shorter.
+    var bottomTrim: CGFloat = 0
 
-    var height: CGFloat {
+    var height: CGFloat { contentHeight - bottomTrim }
+
+    private var contentHeight: CGFloat {
         let rail = shortcutRows > 0
             ? NotchLayout.railHeight(rows: shortcutRows, rowHeight: NotchLayout.shortcutHeight, spacing: shortcutRowSpacing) : 0
         let rows = [levelRow, cardRow, rail].filter { $0 > 0 }
@@ -2792,8 +2798,7 @@ struct NotchGeometry: Equatable {
                 let home = NotchLayout.controls(hasCards: controlsHaveMusic, levelRow: levelRow, searchRow: searchRow,
                                                 shortcutCount: max(0, shortcutCount), width: contentWidth, height: room)
                 let empty = !controlsHaveMusic && !searchRow && sliderCount <= 0 && shortcutCount <= 0
-                let trim = searchRow && home.shortcutRows > 0 ? NotchLayout.searchHomeTrim : 0
-                contentHeight = min(room, empty ? NotchLayout.emptyHeight : home.height - trim)
+                contentHeight = min(room, empty ? NotchLayout.emptyHeight : home.height)
             case .music:
                 let player = NotchLayout.musicPlayerHeight(band: musicBandHeight, playing: musicHasContent)
                 // Presets grow for the optional row; a custom height keeps
