@@ -1733,9 +1733,19 @@ enum NotchSupport {
         value.isFinite ? min(animationTimeRange.upperBound, max(animationTimeRange.lowerBound, value)) : defaultAnimationTime
     }
 
+    /// The list of activities under the closed island has its own time,
+    /// which follows the island's until it is set.
+    static func activityListAnimationTime(island: TimeInterval, stored: Double?) -> TimeInterval {
+        guard let stored, stored.isFinite, stored >= 0 else { return island }
+        return sanitizedAnimationTime(stored)
+    }
+
     static func syncAnimationTime(in defaults: UserDefaults = .standard) {
         let time = sanitizedAnimationTime(defaults.object(forKey: DefaultsKey.notchAnimationTime) as? Double ?? defaultAnimationTime)
-        NotchMotion.timeScale = time / defaultAnimationTime
+        let list = activityListAnimationTime(
+            island: time, stored: defaults.object(forKey: DefaultsKey.notchActivityListAnimationTime) as? Double)
+        NotchMotion.islandTimeScale = time / defaultAnimationTime
+        NotchMotion.activityListTimeScale = list / defaultAnimationTime
     }
 
     static func closeDelay(in defaults: UserDefaults = .standard) -> TimeInterval {
@@ -2962,7 +2972,14 @@ enum NotchMotion {
 
     /// The chosen animation time as a share of the standard one; every
     /// opening and closing spring, and the content fading with it, scales by it.
-    static var timeScale: Double = 1
+    static var timeScale: Double { movesActivityList ? activityListTimeScale : islandTimeScale }
+    static var islandTimeScale: Double = 1
+    /// The same for the list of activities opening and closing under the
+    /// closed island, which has a time of its own.
+    static var activityListTimeScale: Double = 1
+    /// Set by the island before each change of shape: whether it is the
+    /// activity list coming or going.
+    static var movesActivityList = false
     static var growingWidth: Spring { Spring(duration: scaled(0.44), bounce: 0.25) }
     static var growingHeight: Spring { Spring(duration: scaled(0.38), bounce: 0.22) }
     static var shrinkingWidth: Spring { Spring(duration: scaled(0.30), bounce: 0) }

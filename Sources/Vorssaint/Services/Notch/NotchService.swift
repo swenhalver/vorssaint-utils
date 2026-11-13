@@ -235,6 +235,8 @@ final class NotchService: ObservableObject {
     /// the month grid, and how to close it; Escape closes it before the page.
     private var pageLayers: [NotchModule: () -> Void] = [:]
     private var trackingMenu = false
+    /// The activity list was what the island last showed.
+    private var presentedActivityList = false
     /// The home page's controls as the preferences last saved them, read with
     /// the preferences: the open page's geometry is read on every layout pass.
     private var homeControls: [NotchControlItem] = []
@@ -2734,6 +2736,11 @@ final class NotchService: ObservableObject {
         syncMascotKeepAwake()
         syncMascotAgents()
         activitySelection.reconcile(available: compactActivities)
+        // The activity list comes and goes in its own time. The page opening
+        // from it is the island opening, in the island's.
+        let showsActivityList = showsCompactActivityPicker
+        NotchMotion.movesActivityList = showsActivityList || (presentedActivityList && !expanded && !peeking)
+        presentedActivityList = showsActivityList
         if fullscreenCompact {
             finishMusicDeparture()
             presentedMusic = nil

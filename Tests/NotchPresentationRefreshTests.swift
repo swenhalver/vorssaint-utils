@@ -163,6 +163,7 @@ enum NotchPresentationRefreshContract {
         var compactActivities: [NotchCompactActivity] = []
         func compactCompanions(of primary: NotchCompactActivity) -> [NotchCompactActivity] { [] }
         var showsCompactActivityPicker = false
+        var presentedActivityList = false
         var hiddenInFullscreen = false
         var revealingFromAppFullscreen = false
         /// Hidden until hover and set to show activity, as Settings has it.
@@ -1018,6 +1019,28 @@ enum NotchPresentationRefreshContract {
         chosen.switchCompactSelection { chosen.compactActivity = .timer }
         suite.expect(chosen.windowHost?.transitions == [NotchContentTransition.none],
                      "choosing another activity over a song changes the strip in place, without the host's fade")
+
+        // The activity list has an animation time of its own, coming and
+        // going. The page opening from it moves in the island's.
+        let listed = Service()
+        listed.expanded = false
+        listed.refreshPresentation()
+        suite.expect(!NotchMotion.movesActivityList, "the closed island moves in its own time")
+        listed.showsCompactActivityPicker = true
+        listed.refreshPresentation()
+        suite.expect(NotchMotion.movesActivityList, "the activity list opens in its own time")
+        listed.showsCompactActivityPicker = false
+        listed.refreshPresentation()
+        suite.expect(NotchMotion.movesActivityList, "the activity list closes in its own time")
+        listed.refreshPresentation()
+        suite.expect(!NotchMotion.movesActivityList, "once the list is gone the island moves in its own time again")
+        listed.showsCompactActivityPicker = true
+        listed.refreshPresentation()
+        listed.showsCompactActivityPicker = false
+        listed.expanded = true
+        listed.refreshPresentation()
+        suite.expect(!NotchMotion.movesActivityList, "the page opening from the list opens in the island's time")
+        NotchMotion.movesActivityList = false
 
         let reduced = Service()
         reduced.expanded = false

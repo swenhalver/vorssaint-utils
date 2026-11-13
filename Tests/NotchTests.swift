@@ -2085,6 +2085,14 @@ enum NotchTests {
                "hover activation times stay within usable bounds")
         suite.expect([Double.nan, .infinity, -.infinity].allSatisfy { NotchSupport.sanitizedHoverDelay($0) == 0.25 },
                "non-finite hover activation times fall back to the default")
+        suite.expect(NotchSupport.activityListAnimationTime(island: 0, stored: nil) == 0
+                     && NotchSupport.activityListAnimationTime(island: 0.3, stored: -1) == 0.3
+                     && NotchSupport.activityListAnimationTime(island: 0.3, stored: .nan) == 0.3,
+                     "the activity list follows the island’s animation time until its own is set")
+        suite.expect(NotchSupport.activityListAnimationTime(island: 0, stored: 0.25) == 0.25
+                     && NotchSupport.activityListAnimationTime(island: 0.44, stored: 0) == 0
+                     && NotchSupport.activityListAnimationTime(island: 0, stored: 9) == 1,
+                     "the activity list keeps its own animation time, within the island’s range")
         suite.expect(defaults.double(forKey: DefaultsKey.notchCloseDelay) == 0.18
                && NotchSupport.sanitizedCloseDelay(0.65) == 0.65
                && NotchSupport.sanitizedCloseDelay(-1) == 0.0 && NotchSupport.sanitizedCloseDelay(9) == 2.0

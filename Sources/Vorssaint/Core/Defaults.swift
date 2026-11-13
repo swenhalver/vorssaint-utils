@@ -983,6 +983,8 @@ enum DefaultsKey {
     static let notchHoverDelay = "notchHoverDelay"
     static let notchCloseDelay = "notchCloseDelay"
     static let notchAnimationTime = "notchAnimationTime"
+    /// The activity list's own time. Unset, it follows the island's.
+    static let notchActivityListAnimationTime = "notchActivityListAnimationTime"
     static let notchReturnHome = "notchReturnHome"
     static let notchHomeModule = "notchHomeModule"
     static let notchOpensActivity = "notchOpensActivity"

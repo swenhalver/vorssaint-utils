@@ -51,6 +51,8 @@ struct NotchSettings: View {
     @AppStorage(DefaultsKey.notchHoverDelay) private var hoverDelay = NotchSupport.defaultHoverDelay
     @AppStorage(DefaultsKey.notchCloseDelay) private var closeDelay = NotchSupport.defaultCloseDelay
     @AppStorage(DefaultsKey.notchAnimationTime) private var animationTime = NotchSupport.defaultAnimationTime
+    /// Negative until set, when the list follows the island's time.
+    @AppStorage(DefaultsKey.notchActivityListAnimationTime) private var activityListAnimationTime = -1.0
     @AppStorage(DefaultsKey.notchReturnHome) private var returnHome = false
     @AppStorage(DefaultsKey.notchHomeModule) private var homeModule = NotchModule.controls.rawValue
     @AppStorage(DefaultsKey.notchOpensActivity) private var opensActivity = true
@@ -702,6 +704,13 @@ struct NotchSettings: View {
                 delayControl(editor.animationTime, hint: editor.animationTimeHint, value: $animationTime,
                              range: NotchSupport.animationTimeRange, sanitize: NotchSupport.sanitizedAnimationTime)
                     .onChange(of: animationTime) { _, _ in NotchSupport.syncAnimationTime() }
+                delayControl(editor.activityListAnimationTime, hint: editor.activityListAnimationTimeHint,
+                             value: Binding(
+                                get: { NotchSupport.activityListAnimationTime(island: animationTime,
+                                                                              stored: activityListAnimationTime) },
+                                set: { activityListAnimationTime = $0 }),
+                             range: NotchSupport.animationTimeRange, sanitize: NotchSupport.sanitizedAnimationTime)
+                    .onChange(of: activityListAnimationTime) { _, _ in NotchSupport.syncAnimationTime() }
                 switchRow("arrow.up.to.line", text.topEdgeOpen, caption: topEdgeOpens ? text.topEdgeOpenHint : nil,
                           isOn: $topEdgeOpens)
                     .onChange(of: topEdgeOpens) { _, _ in NotchService.shared.syncWithPreferences() }
