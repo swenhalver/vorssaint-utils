@@ -93,6 +93,9 @@ final class ScreenshotSelectionController {
     }
     fileprivate let requiresDraggedRegion: Bool
     private var finished = false
+    /// Built by `prepare()` and waiting to be shown.
+    private var prepared = false
+    private var began = false
     /// Read by the overlays so a late event finds a session that is over.
     fileprivate var isOver: Bool { finished }
     fileprivate var spaceIsDown = false
@@ -284,7 +287,43 @@ final class ScreenshotSelectionController {
         }
     }
 
+    /// Builds the surface before anyone asks for it: every panel laid out
+    /// and drawn, waiting off screen, so `begin` only has to show them.
+    /// Building is most of what opening costs, and far more on a Mac short
+    /// of memory. Only a live session can wait this way: a frozen one needs
+    /// its photographs from the moment it is asked for. False when nothing
+    /// was built.
+    func prepare() -> Bool {
+        guard !freeze, !began, !finished, panels.isEmpty else { return false }
+        let started = DispatchTime.now().uptimeNanoseconds
+        // The windows under the pointer are read as the surface opens.
+        buildPanels(frozenImages: [:], pickable: [])
+        prepared = !panels.isEmpty
+        let ms = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
+        CaptureTiming.note("surface built ahead, \(panels.count) displays", ms: ms)
+        return prepared
+    }
+
+    /// Whether the panels built ahead still cover the displays as they are.
+    var coversCurrentScreens: Bool {
+        let screens = NSScreen.screens
+        return panels.count == screens.count && zip(panels, screens).allSatisfy { panel, screen in
+            panel.displayID == screen.displayID && panel.screenFrame == screen.frame
+                && panel.pixelScale == screen.backingScaleFactor
+                && panel.topChromeHeight == ScreenshotOverlayPanel.topChromeHeight(of: screen)
+        }
+    }
+
+    /// Lets go of a surface that was built ahead and never asked for.
+    func discardPrepared() {
+        guard prepared, !began, !finished else { return }
+        finished = true
+        panels.forEach { $0.close() }
+        panels.removeAll()
+    }
+
     func begin(completion: @escaping (Outcome) -> Void) {
+        began = true
         Self.isSessionOnScreen = true
         Self.activeSession = self
         self.completion = completion
@@ -327,9 +366,46 @@ final class ScreenshotSelectionController {
     private func present(frozenImages: [CGDirectDisplayID: CGImage]) {
         CaptureTiming.mark("present")
         guard !finished else { return }
-        let pickable = ScreenshotCaptureEngine.pickableWindows(
-            hideVorssaintWindows: hideVorssaintWindows,
-            protectedWindowIDs: captureExcludedWindowIDs)
+        if prepared {
+            // Built ahead. Only which display the pointer is on is news, and
+            // it decides where the controls show.
+            panels.forEach {
+                $0.overlayView.refreshForPresentation()
+                $0.displayIfNeeded()
+            }
+        } else {
+            buildPanels(frozenImages: frozenImages,
+                        pickable: ScreenshotCaptureEngine.pickableWindows(
+                            hideVorssaintWindows: hideVorssaintWindows,
+                            protectedWindowIDs: captureExcludedWindowIDs))
+        }
+        guard !panels.isEmpty else {
+            finish(.failed)
+            return
+        }
+        installKeyMonitor()
+        // Give key ownership to only one destination. Opening and immediately
+        // resigning a full-screen key panel can flash the surrounding chrome.
+        screenCaptureOptions?.onPresentationReady?()
+        guard !finished else { return }
+        CaptureTiming.mark("panels built")
+        panels.forEach { $0.orderFrontRegardless() }
+        if screenCaptureOptions?.controlsInNotch != true { keyPanelUnderMouse()?.makeKey() }
+        CaptureTiming.mark("ordered front")
+        if isPickingColor
+            || UserDefaults.standard.bool(forKey: DefaultsKey.screenshotLoupeStartsOn) {
+            // Opt-in: the session opens with the magnifier already up,
+            // instead of waiting for the Z toggle.
+            toggleLoupe()
+        }
+        BackgroundCursor.setAllowed(true)
+        NSCursor.crosshair.set()
+        if prepared { loadPickableWindows() }
+    }
+
+    /// One panel per display, laid out and drawn, none of them on screen yet.
+    private func buildPanels(frozenImages: [CGDirectDisplayID: CGImage],
+                             pickable: [(id: CGWindowID, bounds: CGRect)]) {
         let mainHeight = NSScreen.screens.first?.frame.height ?? 0
 
         for screen in NSScreen.screens {
@@ -364,32 +440,30 @@ final class ScreenshotSelectionController {
             panel.display()
             panels.append(panel)
         }
-        guard !panels.isEmpty else {
-            finish(.failed)
-            return
-        }
+        guard !panels.isEmpty else { return }
         // Each guide was built inside its panel's initializer, before that
         // panel joined `panels`, so the repeat hint could not see the display
         // holding the stored region yet.
         panels.forEach { $0.overlayView.refreshCaptureGuide() }
         screenCaptureOptions?.offersRepeatLastRegion = offersRepeatLastRegion
-        installKeyMonitor()
-        // Give key ownership to only one destination. Opening and immediately
-        // resigning a full-screen key panel can flash the surrounding chrome.
-        screenCaptureOptions?.onPresentationReady?()
-        guard !finished else { return }
-        CaptureTiming.mark("panels built")
-        panels.forEach { $0.orderFrontRegardless() }
-        if screenCaptureOptions?.controlsInNotch != true { keyPanelUnderMouse()?.makeKey() }
-        CaptureTiming.mark("ordered front")
-        if isPickingColor
-            || UserDefaults.standard.bool(forKey: DefaultsKey.screenshotLoupeStartsOn) {
-            // Opt-in: the session opens with the magnifier already up,
-            // instead of waiting for the Z toggle.
-            toggleLoupe()
+    }
+
+    /// A surface built ahead could not know which windows would be on
+    /// screen. They are read once it is up, so reading them costs the
+    /// opening nothing.
+    private func loadPickableWindows() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.finished else { return }
+            let pickable = ScreenshotCaptureEngine.pickableWindows(
+                hideVorssaintWindows: self.hideVorssaintWindows,
+                protectedWindowIDs: self.captureExcludedWindowIDs)
+            let mainHeight = NSScreen.screens.first?.frame.height ?? 0
+            for panel in self.panels {
+                panel.overlayView.adoptWindows(Self.pickableWindows(pickable,
+                                                                    on: panel.screenFrame,
+                                                                    mainScreenHeight: mainHeight))
+            }
         }
-        BackgroundCursor.setAllowed(true)
-        NSCursor.crosshair.set()
     }
 
     private func screenCaptureToolDidChange() {
@@ -1055,7 +1129,8 @@ final class ScreenshotSelectionController {
         // screen marked as taken and every capture feature dead until the app
         // is restarted. The wrong flag is always the one that lets a capture
         // start, never the one that blocks it.
-        if !finished {
+        // One that was only built ahead never took the screen.
+        if began, !finished {
             Self.isSessionOnScreen = false
             if Self.activeSession === self { Self.activeSession = nil }
         }
@@ -1198,8 +1273,7 @@ private final class ScreenshotOverlayPanel: OverlayPanel {
          screenCaptureOptions: ScreenCaptureSelectionOptions?) {
         screenFrame = screen.frame
         displayID = screen.displayID
-        topChromeHeight = max(screen.safeAreaInsets.top,
-                              screen.frame.maxY - screen.visibleFrame.maxY)
+        topChromeHeight = Self.topChromeHeight(of: screen)
         self.frozenImage = frozenImage
         pixelScale = screen.backingScaleFactor
         super.init(contentRect: screen.frame,
@@ -1250,6 +1324,11 @@ private final class ScreenshotOverlayPanel: OverlayPanel {
         overlayViewStorage = view
         container.autoresizingMask = [.width, .height]
         contentView = container
+    }
+
+    /// The notch or the menu bar, whichever reaches further down.
+    static func topChromeHeight(of screen: NSScreen) -> CGFloat {
+        max(screen.safeAreaInsets.top, screen.frame.maxY - screen.visibleFrame.maxY)
     }
 
     /// Tool chrome lives in hosting views whose ideal size is a small bar.
@@ -1406,6 +1485,20 @@ private final class ScreenshotOverlayView: NSView {
         self.loupeImage = frozenImage
         self.windows = windows
         refreshPointerState()
+    }
+
+    /// A surface built ahead shows the controls on the display the pointer
+    /// was on then. Which display has it now is settled as the surface opens.
+    func refreshForPresentation() {
+        refreshGuideVisibility()
+        refreshFullScreenControlVisibility()
+    }
+
+    /// The windows on screen, read after a surface built ahead came up. A
+    /// pointer that already moved over it is asked again what is under it.
+    func adoptWindows(_ windows: [ScreenshotSupport.PickableWindow]) {
+        self.windows = windows
+        if pointerHasMoved { refreshPointerState() }
     }
 
     override var isFlipped: Bool { true }

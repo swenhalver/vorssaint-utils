@@ -15,6 +15,16 @@ enum CaptureTiming {
         log.log("\(stage, privacy: .public) +0 ms")
     }
 
+    /// A line outside any measurement, such as work done ahead of an opening.
+    static func note(_ text: String) {
+        log.log("\(text, privacy: .public)")
+    }
+
+    /// The same, for work that was timed by whoever did it.
+    static func note(_ text: String, ms: Double) {
+        log.log("\(text, privacy: .public) in \(ms, format: .fixed(precision: 1), privacy: .public) ms")
+    }
+
     static func mark(_ stage: String) {
         let ms = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
         // A mark long after the last start begins a new measurement.

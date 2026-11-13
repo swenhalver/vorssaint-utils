@@ -116,6 +116,24 @@ final class ScreenCaptureService: ObservableObject {
     }()
     private var selection: ScreenshotSelectionController?
     private var options: ScreenCaptureSelectionOptions?
+    /// The next surface, built while nothing is being captured, so a click
+    /// or a shortcut only has to show it. Building it is most of what
+    /// opening costs, and several times more on a Mac short of memory.
+    private struct ReadySurface {
+        let options: ScreenCaptureSelectionOptions
+        let controller: ScreenshotSelectionController
+        let language: String
+        /// The preferences it was built from.
+        let preferences: NSDictionary
+    }
+    private var ready: ReadySurface?
+    /// A preference changed since `ready` was built; it is compared before use.
+    private var readyMayBeStale = false
+    private var readyIsBuilding = false
+    private var readyWork: DispatchWorkItem?
+    private var readyObservers: [NSObjectProtocol] = []
+    /// What was opened last, which is what is most likely asked for next.
+    private var lastOpened: (tool: ScreenCaptureTool, showsCaptureMenu: Bool)?
     private var countdown: DispatchWorkItem?
     private var countdownTools: [ScreenCaptureTool]?
     private var countdownRemaining = 0
@@ -137,8 +155,11 @@ final class ScreenCaptureService: ObservableObject {
             toolShortcutRegistrationFailures = []
             toolHotkeys.values.forEach { $0.unregister() }
             cancelSelection()
+            dropReadySurface()
             return
         }
+        watchReadySurface()
+        scheduleReadySurface(after: 2)
         if let activeTools = options?.availableTools ?? countdownTools,
            ScreenshotSupport.captureAvailabilityChanged(activeTools: activeTools,
                                                         availableTools: availableTools) {
@@ -168,6 +189,9 @@ final class ScreenCaptureService: ObservableObject {
         CaptureHotspot.shared.suspend()
         toolHotkeys.values.forEach { $0.unregister() }
         cancelSelection()
+        readyObservers.forEach(NotificationCenter.default.removeObserver)
+        readyObservers = []
+        dropReadySurface()
     }
 
     /// Opens the same chooser from every feature surface. A feature-specific
@@ -287,27 +311,38 @@ final class ScreenCaptureService: ObservableObject {
     private func beginSelection(tools: [ScreenCaptureTool], selected: ScreenCaptureTool,
                                showsCaptureMenu: Bool, forMarkup: Bool = false) {
         guard selection == nil, !ScreenshotSelectionController.isSessionOnScreen else { return }
-        let options = ScreenCaptureSelectionOptions(availableTools: tools,
-                                                    selectedTool: selected,
-                                                    showsCaptureMenu: showsCaptureMenu,
-                                                    controlsInNotch: NotchSupport.routesCaptureControls() && NotchService.shared.acceptsSystemFeedback)
+        let controlsInNotch = NotchSupport.routesCaptureControls() && NotchService.shared.acceptsSystemFeedback
+        lastOpened = (selected, showsCaptureMenu)
+        let waiting = takeReadySurface(tools: tools, selected: selected,
+                                       showsCaptureMenu: showsCaptureMenu,
+                                       controlsInNotch: controlsInNotch)
+        let options = waiting?.options
+            ?? ScreenCaptureSelectionOptions(availableTools: tools,
+                                             selectedTool: selected,
+                                             showsCaptureMenu: showsCaptureMenu,
+                                             controlsInNotch: controlsInNotch)
         self.options = options
         if forMarkup { options.markupRequested = true }
-        startSelection(options: options)
+        startSelection(options: options, controller: waiting?.controller)
     }
 
-    private func startSelection(options: ScreenCaptureSelectionOptions) {
-        CaptureTiming.mark("startSelection")
-        guard selection == nil, !ScreenshotSelectionController.isSessionOnScreen,
-              self.options === options else { return }
+    /// The policy a surface for `options` follows, as the preferences stand.
+    private func capturePolicy(for options: ScreenCaptureSelectionOptions)
+        -> ScreenshotSupport.UnifiedCapturePolicy {
         let defaults = UserDefaults.standard
-        let policy = ScreenshotSupport.unifiedCapturePolicy(
+        return ScreenshotSupport.unifiedCapturePolicy(
             for: options.selectedTool,
             screenshotFreeze: defaults.bool(forKey: DefaultsKey.screenshotFreeze),
             screenshotIncludePointer: defaults.bool(forKey: DefaultsKey.screenshotIncludePointer),
             screenshotHideVorssaintWindows: defaults.bool(
                 forKey: DefaultsKey.screenshotHideVorssaintWindows))
-        let controller = ScreenshotSelectionController(
+    }
+
+    private func makeController(for options: ScreenCaptureSelectionOptions,
+                                policy: ScreenshotSupport.UnifiedCapturePolicy)
+        -> ScreenshotSelectionController {
+        let defaults = UserDefaults.standard
+        return ScreenshotSelectionController(
             freeze: policy.freeze,
             includePointer: policy.includePointer,
             showLastRegion: defaults.bool(forKey: DefaultsKey.screenshotShowLastRegion),
@@ -333,6 +368,18 @@ final class ScreenCaptureService: ObservableObject {
             mode: policy.usesGeometry ? .geometry : .image,
             supportsScrollingCapture: options.availableTools.contains(.screenshot),
             screenCaptureOptions: options)
+    }
+
+    /// `waiting` is a surface built ahead for exactly these options.
+    private func startSelection(options: ScreenCaptureSelectionOptions,
+                                controller waiting: ScreenshotSelectionController? = nil) {
+        CaptureTiming.mark(waiting == nil ? "startSelection" : "startSelection, built ahead")
+        guard selection == nil, !ScreenshotSelectionController.isSessionOnScreen,
+              self.options === options else {
+            waiting?.discardPrepared()
+            return
+        }
+        let controller = waiting ?? makeController(for: options, policy: capturePolicy(for: options))
         if options.controlsInNotch {
             connectCaptureControlsSurface(options, controller: controller)
             options.onPresentationReady = { [weak self, weak options] in
@@ -352,6 +399,14 @@ final class ScreenCaptureService: ObservableObject {
             options.onCaptureControlsSurfaceChange = nil
             self.selection = nil
             self.options = nil
+            // A surface closed without a capture may be opened again at
+            // once. Otherwise the next one waits until the picture is taken
+            // and its preview is up.
+            if case .cancelled = outcome {
+                self.scheduleReadySurface(after: Self.readyDelayAfterClosing)
+            } else {
+                self.scheduleReadySurface(after: 1)
+            }
             let markup = options.markupRequested
             let text = options.textRequested
             options.markupRequested = false
@@ -488,8 +543,171 @@ final class ScreenCaptureService: ObservableObject {
         options?.onPresentationReady = nil
         options?.onCaptureControlsSurfaceChange = nil
         cancelCountdownIfActive()
+        let hadSelection = selection != nil
         selection?.cancel()
         selection = nil
         options = nil
+        if hadSelection { scheduleReadySurface(after: Self.readyDelayAfterClosing) }
+    }
+
+    // MARK: Ready surface
+
+    /// Window positions and what the Command Bar learns change all day and
+    /// decide nothing about a capture surface.
+    private static let readyIgnoredPreferencePrefixes = ["commandBar", "NSWindow Frame", "NSSplitView",
+                                                         "NSNavPanel", "NSStatusItem"]
+
+    /// Long enough for the closed surface to leave the screen first.
+    private static let readyDelayAfterClosing: TimeInterval = 0.15
+
+    private static func readyPreferences() -> NSDictionary {
+        guard let name = Bundle.main.bundleIdentifier,
+              var domain = UserDefaults.standard.persistentDomain(forName: name) else { return [:] }
+        for key in domain.keys where readyIgnoredPreferencePrefixes.contains(where: key.hasPrefix) {
+            domain[key] = nil
+        }
+        return domain as NSDictionary
+    }
+
+    /// A surface is built from the preferences and the displays as they
+    /// were, so a change to either sends it back to be checked or rebuilt.
+    private func watchReadySurface() {
+        guard readyObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        readyObservers.append(center.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            if Thread.isMainThread {
+                self?.readyPreferencesChanged()
+            } else {
+                DispatchQueue.main.async { self?.readyPreferencesChanged() }
+            }
+        })
+        readyObservers.append(center.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.dropReadySurface()
+            self?.scheduleReadySurface(after: 2)
+        })
+    }
+
+    /// Called for every preference written anywhere in the app, so it only
+    /// notes the change. The comparison waits until the writing stops.
+    private func readyPreferencesChanged() {
+        // Building a surface writes a few preferences of its own.
+        guard !readyIsBuilding, selection == nil else { return }
+        if ready != nil { readyMayBeStale = true }
+        scheduleReadySurface(after: 2)
+    }
+
+    private func scheduleReadySurface(after delay: TimeInterval) {
+        readyWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.readyWork = nil
+            self?.refreshReadySurface()
+        }
+        readyWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func dropReadySurface() {
+        readyWork?.cancel()
+        readyWork = nil
+        ready?.controller.discardPrepared()
+        ready = nil
+        readyMayBeStale = false
+    }
+
+    /// Keeps a surface waiting whenever one can be: checks the one there
+    /// against the preferences, and builds one when there is none.
+    private func refreshReadySurface() {
+        if let waiting = ready {
+            guard readyMayBeStale else { return }
+            readyMayBeStale = false
+            let current = Self.readyPreferences()
+            if waiting.preferences.isEqual(current), waiting.language == L10n.shared.language.rawValue { return }
+            CaptureTiming.note("surface built ahead is out of date: "
+                + Self.changedKeys(from: waiting.preferences, to: current))
+            dropReadySurface()
+        }
+        guard selection == nil, !ScreenshotSelectionController.isSessionOnScreen else { return }
+        guard countdown == nil, !ScreenshotService.shared.hasActiveCapture,
+              !ScreenRecorderService.shared.hasActiveCapture else {
+            // Busy taking or recording something, which ends without a word here.
+            scheduleReadySurface(after: 5)
+            return
+        }
+        guard Permissions.shared.screenRecording else { return }
+        let available = ScreenCaptureTool.available()
+        guard !available.isEmpty else { return }
+        let selected = lastOpened.flatMap { available.contains($0.tool) ? $0.tool : nil }
+            ?? (available.contains(.screenshot) ? .screenshot : available[0])
+        // Until something was opened, the likeliest opening is a shortcut's
+        // or the top edge's, which both count as a shortcut.
+        let showsCaptureMenu = lastOpened.flatMap { $0.tool == selected ? $0.showsCaptureMenu : nil }
+            ?? selected.showsCaptureMenu(fromShortcut: true)
+        let options = ScreenCaptureSelectionOptions(
+            availableTools: available,
+            selectedTool: selected,
+            showsCaptureMenu: showsCaptureMenu,
+            controlsInNotch: NotchSupport.routesCaptureControls() && NotchService.shared.acceptsSystemFeedback)
+        let policy = capturePolicy(for: options)
+        // A frozen surface shows photographs taken as it opens.
+        guard !policy.freeze else { return }
+        readyIsBuilding = true
+        defer { readyIsBuilding = false }
+        let controller = makeController(for: options, policy: policy)
+        guard controller.prepare() else { return }
+        ready = ReadySurface(options: options, controller: controller,
+                             language: L10n.shared.language.rawValue,
+                             preferences: Self.readyPreferences())
+        readyMayBeStale = false
+    }
+
+    /// The surface built ahead, when it is the one being asked for and
+    /// nothing it was built from has changed. Otherwise it is let go, and
+    /// the caller builds one as it always did.
+    private func takeReadySurface(tools: [ScreenCaptureTool], selected: ScreenCaptureTool,
+                                  showsCaptureMenu: Bool, controlsInNotch: Bool) -> ReadySurface? {
+        guard let waiting = ready else {
+            CaptureTiming.note("no surface built ahead")
+            return nil
+        }
+        ready = nil
+        readyWork?.cancel()
+        readyWork = nil
+        let stale = readyMayBeStale
+        readyMayBeStale = false
+        var mismatch: String?
+        if waiting.options.availableTools != tools || waiting.options.selectedTool != selected
+            || waiting.options.showsCaptureMenu != showsCaptureMenu
+            || waiting.options.controlsInNotch != controlsInNotch {
+            mismatch = "another tool or menu"
+        } else if !waiting.controller.coversCurrentScreens {
+            mismatch = "displays changed"
+        } else if waiting.language != L10n.shared.language.rawValue {
+            mismatch = "language changed"
+        } else if stale {
+            let current = Self.readyPreferences()
+            if !waiting.preferences.isEqual(current) {
+                mismatch = Self.changedKeys(from: waiting.preferences, to: current)
+            }
+        }
+        if let mismatch {
+            CaptureTiming.note("surface built ahead not used: \(mismatch)")
+            waiting.controller.discardPrepared()
+            return nil
+        }
+        return waiting
+    }
+
+    /// The names of up to five preferences that differ, for the timing log.
+    private static func changedKeys(from old: NSDictionary, to new: NSDictionary) -> String {
+        let keys = Set((old.allKeys + new.allKeys).compactMap { $0 as? String })
+        let changed = keys.filter { key in
+            let before = old[key] as AnyObject?, after = new[key] as AnyObject?
+            return !(before === after || before?.isEqual(after) == true)
+        }.sorted()
+        return changed.prefix(5).joined(separator: ", ") + (changed.count > 5 ? ", …" : "")
     }
 }
