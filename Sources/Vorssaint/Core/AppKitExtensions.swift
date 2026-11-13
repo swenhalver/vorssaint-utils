@@ -44,4 +44,10 @@ extension NSScreen {
     static var pointerVisibleFrame: CGRect {
         (withMouse ?? screens.first)?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
     }
+
+    /// The laptop's own display while it is in use: a closed lid takes it
+    /// out of the attached screens, and a desktop Mac has none.
+    static var builtIn: NSScreen? {
+        screens.first { $0.displayID != 0 && CGDisplayIsBuiltin($0.displayID) != 0 }
+    }
 }

@@ -1401,6 +1401,18 @@ enum ScreenshotSupport {
                       height: min(maximum.height, max(minimum.height, preferred.height)))
     }
 
+    /// Where an editor window of this size opens inside a display's visible
+    /// frame: centred across, and a little above the middle as a centred
+    /// window sits. The display is named by the caller, because a new
+    /// window's own idea of its display follows the keyboard, which can be
+    /// on a display the capture was not taken on.
+    static func editorWindowOrigin(windowSize: CGSize, visibleFrame: CGRect) -> CGPoint {
+        let freeWidth = max(0, visibleFrame.width - windowSize.width)
+        let freeHeight = max(0, visibleFrame.height - windowSize.height)
+        return CGPoint(x: (visibleFrame.minX + freeWidth / 2).rounded(),
+                       y: (visibleFrame.minY + freeHeight * 2 / 3).rounded())
+    }
+
     /// The footer under the canvas wraps to a second row when a tool's
     /// controls do not fit beside the info and zoom chips, so its height
     /// changes with the tool.

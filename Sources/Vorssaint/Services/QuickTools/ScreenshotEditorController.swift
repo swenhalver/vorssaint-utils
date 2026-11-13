@@ -1395,7 +1395,9 @@ final class ScreenshotEditorController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        let screen = NSScreen.pointerVisibleFrame
+        // The editor opens on the laptop's own display whenever it is in
+        // use, wherever the capture was taken; otherwise where the pointer is.
+        let screen = NSScreen.builtIn?.visibleFrame ?? NSScreen.pointerVisibleFrame
         let minimumSize = ScreenshotSupport.editorMinimumContentSize(visibleSize: screen.size)
         // The hosting view rewrites the window's size limits on its first
         // layout pass, so a contentMinSize set on the window is silently
@@ -1427,7 +1429,10 @@ final class ScreenshotEditorController: NSObject, NSWindowDelegate {
             imagePointSize: model.pointSize,
             visibleSize: screen.size)
         window.setContentSize(contentSize)
-        window.center()
+        // Placed by hand: center() would pick the display holding the
+        // keyboard, which can be one nobody is looking at.
+        window.setFrameOrigin(ScreenshotSupport.editorWindowOrigin(
+            windowSize: window.frame.size, visibleFrame: screen))
 
         self.window = window
         installKeyMonitor()

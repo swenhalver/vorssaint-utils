@@ -1680,6 +1680,19 @@ enum ScreenshotFeatureTests {
         suite.expect(largeCaptureWindow.width <= 1470 * 0.90
                 && largeCaptureWindow.height <= 956 * 0.88,
                "a large screenshot editor stays inside the visible display")
+        let secondDisplay = CGRect(x: -2056, y: 1106, width: 2056, height: 1290)
+        let editorOnSecond = ScreenshotSupport.editorWindowOrigin(
+            windowSize: CGSize(width: 980, height: 712), visibleFrame: secondDisplay)
+        let editorOnFirst = ScreenshotSupport.editorWindowOrigin(
+            windowSize: CGSize(width: 980, height: 712),
+            visibleFrame: CGRect(x: 0, y: 0, width: 2056, height: 1290))
+        suite.expect(secondDisplay.contains(CGRect(origin: editorOnSecond, size: CGSize(width: 980, height: 712)))
+                && editorOnSecond.x == -1518 && editorOnFirst.x == 538 && editorOnFirst.y > (1290 - 712) / 2,
+               "the editor opens centred on the display it is given, a little above the middle")
+        let oversized = ScreenshotSupport.editorWindowOrigin(
+            windowSize: CGSize(width: 3000, height: 2000), visibleFrame: secondDisplay)
+        suite.expect(oversized == secondDisplay.origin,
+               "an editor larger than the display starts at its corner rather than off it")
         typealias RailLayout = ScreenshotSupport.ToolRailLayout
         let railTools = ScreenshotSupport.Tool.editorTools.count
         func railFits(_ layout: RailLayout, toolCount: Int, height: CGFloat) -> Bool {
