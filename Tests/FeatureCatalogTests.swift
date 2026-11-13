@@ -3295,6 +3295,7 @@ enum MusicLaunchBlockerContract {
         var terminateSucceeds = true
         var forceCalls = 0
         var terminateCalls = 0
+        var isTerminated = false
         init(_ pid: pid_t, bundle: String? = "com.apple.Music") {
             processIdentifier = pid
             bundleIdentifier = bundle
@@ -3323,6 +3324,8 @@ enum MusicLaunchBlockerContract {
         var lastMediaKeyCode: UInt16?
         var judgedLaunchPID: pid_t?
         var lastBlockAt: TimeInterval?
+        var commandRequest: (bundleID: String, at: TimeInterval, plays: Bool)?
+        var unexplainedLaunch: (app: NSRunningApplication, at: TimeInterval)?
         var commandWatcherRunning = false
         var awaitedPIDs: [pid_t] = []
         func startCommandWatcher() { commandWatcherRunning = true }
@@ -3494,5 +3497,59 @@ enum MusicLaunchBlockerContract {
         launch(fallback)
         suite.expect(fallback.forceCalls == 1 && fallback.terminateCalls == 1 && service.replacementCalls == 1,
                      "a successful normal termination still opens the configured replacement once")
+        runCommandRequests(suite)
+    }
+
+    /// Headphones send Play with no key to observe; the system's logged
+    /// request is the only evidence, read before or after the launch.
+    private static func runCommandRequests(_ suite: TestSuite) {
+        let service = CommandService()
+        service.mediaKeyTap = Tap()
+        service.observers = [NSObject()]
+        Environment.enabled = true
+        Environment.available = true
+        Environment.trusted = true
+        Environment.gestureAge = 100
+        func launch(_ pid: pid_t, at now: TimeInterval) -> NSRunningApplication {
+            let app = NSRunningApplication(pid)
+            Environment.now = now
+            service.handleLaunch(Notification(name: NSWorkspace.willLaunchApplicationNotification,
+                                               userInfo: [NSWorkspace.applicationUserInfoKey: app]))
+            return app
+        }
+        func request(at now: TimeInterval) {
+            Environment.now = now
+            service.handleCommandRequest(bundleID: "com.apple.Music", plays: true)
+        }
+        // Three presses on the headphones: 0, 4.6 and 7 seconds.
+        request(at: 100)
+        let first = launch(60, at: 100.1)
+        request(at: 104.6)
+        let second = launch(61, at: 104.7)
+        request(at: 107)
+        let third = launch(62, at: 107.1)
+        suite.expect(first.forceCalls == 1 && second.forceCalls == 1 && third.forceCalls == 1,
+                     "every Play from the headphones is blocked, however soon it follows the last block")
+        let early = launch(63, at: 120)
+        request(at: 120.4)
+        request(at: 121)
+        let next = launch(64, at: 121.1)
+        suite.expect(early.forceCalls == 1 && next.forceCalls == 1,
+                     "a launch seen before its request is blocked, and so is the press right after it")
+        service.lastMediaKeyAt = 139.8
+        let keyed = launch(65, at: 140)
+        request(at: 140.3)
+        let deliberate = launch(66, at: 141)
+        suite.expect(keyed.forceCalls == 1 && deliberate.forceCalls == 0,
+                     "a media key's own late request cannot block the launch that follows it")
+        service.lastMediaKeyAt = 169.8
+        let keyedAgain = launch(67, at: 170)
+        request(at: 170.3)
+        request(at: 171)
+        let afterKey = launch(68, at: 171.1)
+        suite.expect(keyedAgain.forceCalls == 1 && afterKey.forceCalls == 1,
+                     "only one late request is dropped after a media key; the next one blocks")
+        let unasked = launch(69, at: 190)
+        suite.expect(unasked.forceCalls == 0, "a launch with no request and no key is left alone")
     }
 }

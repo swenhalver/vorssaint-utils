@@ -36,7 +36,8 @@ final class MusicLaunchBlocker: ObservableObject {
     private var commandRequest: (bundleID: String, at: TimeInterval, plays: Bool)?
     /// A launch no key explained, kept briefly in case its request is logged late.
     private var unexplainedLaunch: (app: NSRunningApplication, at: TimeInterval)?
-    /// The launch just blocked; its own late log line must not arm another.
+    /// The launch a media key just blocked. The system logs that launch's
+    /// request afterwards, and that one line must not arm another block.
     private var lastBlockAt: TimeInterval?
 
     private init() {}
@@ -142,10 +143,18 @@ final class MusicLaunchBlocker: ObservableObject {
         if let request = commandRequest, request.bundleID == app.bundleIdentifier,
            MusicLaunchSupport.isCommandLaunch(launchAt: now, requestAt: request.at) {
             commandRequest = nil
-            block(app, startingPlayback: request.plays)
+            blockForCommand(app, startingPlayback: request.plays)
             return
         }
         unexplainedLaunch = (app, now)
+    }
+
+    /// The request that explains this launch has been read already, so no
+    /// line is still to come for it. Keeping the block's time would drop
+    /// the request of the next press, and that press would open the app.
+    private func blockForCommand(_ app: NSRunningApplication, startingPlayback: Bool) {
+        block(app, startingPlayback: startingPlayback)
+        lastBlockAt = nil
     }
 
     private func handleCommandRequest(bundleID: String, plays: Bool) {
@@ -156,13 +165,15 @@ final class MusicLaunchBlocker: ObservableObject {
             unexplainedLaunch = nil
             if !pending.app.isTerminated,
                MusicLaunchSupport.isCommandLaunch(launchAt: pending.at, requestAt: now) {
-                block(pending.app, startingPlayback: plays)
+                blockForCommand(pending.app, startingPlayback: plays)
                 return
             }
         }
-        // A media key already blocked this launch; its request arrives after.
-        if let lastBlockAt, MusicLaunchSupport.isCommandLaunch(launchAt: lastBlockAt, requestAt: now) {
-            return
+        // A media key already blocked this launch; its request arrives after,
+        // once. Any later request belongs to a new press.
+        if let blockedAt = lastBlockAt {
+            lastBlockAt = nil
+            if MusicLaunchSupport.isCommandLaunch(launchAt: blockedAt, requestAt: now) { return }
         }
         commandRequest = (bundleID, now, plays)
     }

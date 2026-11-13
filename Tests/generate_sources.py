@@ -552,6 +552,14 @@ def main():
                         "    func syncWithPreferences(", "    private func start(", "    func stop(",
                         "    private func handleLaunch(", "    private func handleMediaKeyEvent(",
                         "    private func block("])
+          + "}\nfinal class CommandService: Fixture {\n"
+          + "".join(declaration("Sources/Vorssaint/Services/Audio/MusicLaunchBlocker.swift", prefix)
+                    .replace("private ", replacement, 1) for prefix, replacement in [
+                        ("    func stop(", ""), ("    private func handleLaunch(", ""),
+                        ("    private func block(", ""),
+                        ("    private func awaitMediaCommand(", "override "),
+                        ("    private func blockForCommand(", ""),
+                        ("    private func handleCommandRequest(", "")])
           + "}\n}\n")
     middle_click_lifecycle = "".join(
         declaration("Sources/Vorssaint/Services/MiddleClick/MiddleClickService.swift", prefix)
