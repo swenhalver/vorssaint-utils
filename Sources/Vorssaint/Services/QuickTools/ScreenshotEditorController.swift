@@ -1420,7 +1420,10 @@ final class ScreenshotEditorController: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = false
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace]
+        // No .moveToActiveSpace: with separate Spaces per display, the
+        // active Space can be on another display (even a virtual one), and
+        // joining it drags the window off the laptop's screen.
+        window.collectionBehavior = [.fullScreenAuxiliary]
 
         // Chrome must equal the view's designed margins exactly (rail 64 +
         // sides, action band above, style band below), so a fresh window
@@ -1431,13 +1434,25 @@ final class ScreenshotEditorController: NSObject, NSWindowDelegate {
         window.setContentSize(contentSize)
         // Placed by hand: center() would pick the display holding the
         // keyboard, which can be one nobody is looking at.
-        window.setFrameOrigin(ScreenshotSupport.editorWindowOrigin(
-            windowSize: window.frame.size, visibleFrame: screen))
+        let placeOnScreen = { [weak window] in
+            guard let window else { return }
+            window.setFrameOrigin(ScreenshotSupport.editorWindowOrigin(
+                windowSize: window.frame.size, visibleFrame: screen))
+        }
+        placeOnScreen()
 
         self.window = window
         installKeyMonitor()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        // macOS can still hand a new window to the Space of the display that
+        // has the keyboard. Put it back if it left the chosen display.
+        let keepOnScreen = { [weak window] in
+            guard let window, !screen.intersects(window.frame) else { return }
+            placeOnScreen()
+        }
+        keepOnScreen()
+        DispatchQueue.main.async(execute: keepOnScreen)
         // Let the window appear before starting competing Vision workloads.
         DispatchQueue.main.async { [weak self] in
             guard let self, self.window?.isVisible == true else { return }
