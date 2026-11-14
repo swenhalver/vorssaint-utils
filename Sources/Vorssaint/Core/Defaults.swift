@@ -981,6 +981,9 @@ enum DefaultsKey {
     static let notchLowBatteryEarlyThreshold = "notchLowBatteryEarlyThreshold"
     static let notchLowBatteryMenuBar = "notchLowBatteryMenuBar"
     static let notchHoverDelay = "notchHoverDelay"
+    /// Points from the display's top edge that a hover opens the closed
+    /// island from; 0 keeps the whole island.
+    static let notchHoverZoneHeight = "notchHoverZoneHeight"
     static let notchCloseDelay = "notchCloseDelay"
     static let notchAnimationTime = "notchAnimationTime"
     /// The activity list's own time. Unset, it follows the island's.
@@ -1608,6 +1611,7 @@ enum Defaults {
         DefaultsKey.notchLowBatteryEarlyThreshold: NotchSupport.defaultEarlyBatteryThreshold,
         DefaultsKey.notchLowBatteryMenuBar: true,
         DefaultsKey.notchHoverDelay: NotchSupport.defaultHoverDelay,
+        DefaultsKey.notchHoverZoneHeight: 5.0,
         DefaultsKey.notchCloseDelay: NotchSupport.defaultCloseDelay,
         DefaultsKey.notchAnimationTime: NotchSupport.defaultAnimationTime,
         DefaultsKey.notchReturnHome: false,

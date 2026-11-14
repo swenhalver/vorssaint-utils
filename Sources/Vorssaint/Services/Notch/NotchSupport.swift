@@ -2908,6 +2908,15 @@ struct NotchGeometry: Equatable {
         return CGRect(origin: .zero, size: size).contains(
             CGPoint(x: point.x - frame.minX, y: frame.maxY - point.y))
     }
+
+    /// Where a hover reaches the island: all of it, or with a top zone only
+    /// its width within that many points of the display's top edge.
+    func hoverContains(_ point: CGPoint, in size: CGSize, topZone: CGFloat?) -> Bool {
+        guard let topZone, topZone > 0 else { return contains(point, in: size) }
+        let frame = self.frame(for: size)
+        return CGRect(x: frame.minX, y: 0, width: frame.width, height: topZone).contains(
+            CGPoint(x: point.x, y: screen.maxY - point.y))
+    }
 }
 
 struct NotchSessionState {

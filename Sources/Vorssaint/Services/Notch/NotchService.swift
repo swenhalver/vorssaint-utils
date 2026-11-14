@@ -488,6 +488,15 @@ final class NotchService: ObservableObject {
             : UserDefaults.standard.bool(forKey: DefaultsKey.notchOpenOnHover)
     }
 
+    /// A closed island that hover would open answers only this close to the
+    /// display's top edge. Anything showing on it keeps its whole area.
+    private var hoverTopZone: CGFloat? {
+        let height = UserDefaults.standard.double(forKey: DefaultsKey.notchHoverZoneHeight)
+        guard height > 0, hoverOpeningEnabled, !expanded, !peeking, notice == nil, captureControls == nil,
+              !dragPlaceholder, !activityPickerMenuOpen, compactActivities.count <= 1 else { return nil }
+        return CGFloat(height)
+    }
+
     /// Out of sight at rest, the island has no window for the pointer to
     /// enter, so hover follows the pointer over its place instead.
     private var watchesHiddenHover: Bool {
@@ -1636,7 +1645,7 @@ final class NotchService: ObservableObject {
         let point = NSEvent.mouseLocation
         let wasInside = inside
         let showedPicker = showsCompactActivityPicker
-        inside = watchesHiddenHover ? geometry.contains(point, in: geometry.collapsed)
+        inside = watchesHiddenHover ? geometry.hoverContains(point, in: geometry.collapsed, topZone: hoverTopZone)
             && windowHost?.isConcealedForMissionControl == false
             : windowHost?.containsHover(point) == true || pointerOverChildWindow(point)
         hoverState.update(pointerInside: inside)
@@ -1699,7 +1708,9 @@ final class NotchService: ObservableObject {
                       self.captureControls == nil, (self.notice == nil || self.hiddenUntilHover), !self.dragPlaceholder,
                       self.hoverOpeningEnabled,
                       self.windowHost?.blocksHoverReveal() == false,
-                      self.geometry.contains(NSEvent.mouseLocation, in: self.watchesHiddenHover ? self.geometry.collapsed : self.surfaceSize) else { return }
+                      self.geometry.hoverContains(NSEvent.mouseLocation,
+                                                  in: self.watchesHiddenHover ? self.geometry.collapsed : self.surfaceSize,
+                                                  topZone: self.hoverTopZone) else { return }
                 // Following the closed island ends as it opens or peeks.
                 self.removeHoverExitMonitors()
                 if UserDefaults.standard.bool(forKey: DefaultsKey.notchHoverExpands) {
@@ -2802,6 +2813,7 @@ final class NotchService: ObservableObject {
         }
         var presented = expanded ? expandedGeometry : geometry
         presented.surfaceShift = surfaceShift
+        windowHost?.hoverTopZone = hoverTopZone
         windowHost?.present(size: size, geometry: presented, animated: animated,
                             transitionContent: contentTransition,
                             quickAccess: expanded && captureControls == nil && !showingCommandBar && !access.buttons.isEmpty

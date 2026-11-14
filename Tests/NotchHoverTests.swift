@@ -35,7 +35,10 @@ enum NotchHoverTests {
                 default: return expands
                 }
             }
-            func double(forKey key: String) -> Double { delay }
+            var hoverZone = 0.0
+            func double(forKey key: String) -> Double {
+                key == DefaultsKey.notchHoverZoneHeight ? hoverZone : delay
+            }
         }
     }
     enum AssistiveKeyboard {
@@ -765,6 +768,28 @@ enum NotchHoverTests {
                                  "the first return after an explicit close opens normally even without a tracking exit")
                 }
             }
+        }
+        // A top zone opens the closed island only from the display's top edge.
+        do {
+            let zoned = fixture()
+            UserDefaults.standard.hoverZone = 5
+            UserDefaults.standard.delay = 0.3
+            let geometry = zoned.geometry, size = zoned.surfaceSize
+            let island = geometry.frame(for: size)
+            suite.expect(geometry.hoverContains(CGPoint(x: island.midX, y: geometry.screen.maxY - 4), in: size, topZone: 5)
+                         && !geometry.hoverContains(CGPoint(x: island.midX, y: geometry.screen.maxY - 6), in: size, topZone: 5)
+                         && !geometry.hoverContains(CGPoint(x: island.maxX + 1, y: geometry.screen.maxY - 1), in: size, topZone: 5)
+                         && geometry.hoverContains(CGPoint(x: island.midX, y: geometry.screen.maxY - 6), in: size, topZone: nil),
+                         "a hover zone is the island's width within its height of the display's top edge")
+            NSEvent.mouseLocation = CGPoint(x: island.midX, y: geometry.screen.maxY - 12)
+            zoned.hover(true)
+            DispatchQueue.main.advance(0.5)
+            suite.expect(zoned.openings == 0, "with a 5-point zone, a hover lower on the closed island does not open it")
+            leave(zoned)
+            NSEvent.mouseLocation = CGPoint(x: island.midX, y: geometry.screen.maxY - 2)
+            zoned.hover(true)
+            DispatchQueue.main.advance(0.5)
+            suite.expect(zoned.openings == 1, "the top 5 points of the display still open the island")
         }
         // A timed capture still attached to the closed island would hear each
         // followed move as the pointer leaving and restart its dismissal.

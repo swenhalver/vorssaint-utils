@@ -99,6 +99,7 @@ enum NotchPresentationRefreshContract {
     final class Host {
         let panel = Panel()
         var departsContent = false
+        var hoverTopZone: CGFloat?
         func finishDeparture() { departsContent = false }
         var concealedForMissionControl = false
         var isConcealedForMissionControl: Bool { concealedForMissionControl }

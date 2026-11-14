@@ -603,6 +603,15 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
         })
     }
 
+    /// While set, the closed island answers hover only this close to the
+    /// display's top edge.
+    var hoverTopZone: CGFloat? {
+        didSet {
+            guard hoverTopZone != oldValue else { return }
+            canvas.hoverTopZone = hoverTopZone
+        }
+    }
+
     func setHoverHandler(_ handler: @escaping (Bool) -> Void) {
         canvas.hoverChanged = handler
         quickAccessContainer?.hoverChanged = handler
@@ -612,7 +621,7 @@ final class NotchWindowHost: NSObject, CAAnimationDelegate {
         guard isPresented, !concealedForMissionControl else { return false }
         // Hover follows the destination bounds, not a transient mask edge.
         // A resize must never turn a stationary pointer into an exit.
-        if currentGeometry.contains(screenPoint, in: targetSize) { return true }
+        if currentGeometry.hoverContains(screenPoint, in: targetSize, topZone: hoverTopZone) { return true }
         guard let container = quickAccessContainer else { return false }
         let point = container.convert(panel.convertPoint(fromScreen: screenPoint), from: nil)
         return container.hoverRects.contains { $0.contains(point) }
@@ -1153,6 +1162,9 @@ private final class NotchCanvas: NSView {
     private var activationRect = CGRect.zero
     private var hoverTrackingArea: NSTrackingArea?
     var hoverChanged: ((Bool) -> Void)?
+    var hoverTopZone: CGFloat? {
+        didSet { if hoverTopZone != oldValue { needsLayout = true } }
+    }
     private let silhouette = CAShapeLayer()
     private let edge = CAShapeLayer()
     private let edgeMask = CALayer()
@@ -1898,7 +1910,8 @@ private final class NotchCanvas: NSView {
         if backdrop.frame != backdropFrame { backdrop.frame = backdropFrame }
         synchronizeBackdrop()
         activationButton.frame = activationRect.offsetBy(dx: islandX(contentSize), dy: 0)
-        let hoverRect = CGRect(x: islandX(contentSize), y: 0, width: contentSize.width, height: contentSize.height)
+        let hoverHeight = hoverTopZone.map { min($0, contentSize.height) } ?? contentSize.height
+        let hoverRect = CGRect(x: islandX(contentSize), y: 0, width: contentSize.width, height: hoverHeight)
         if hoverTrackingArea?.rect != hoverRect {
             if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
             let area = NSTrackingArea(rect: hoverRect, options: [.mouseEnteredAndExited, .activeAlways, .enabledDuringMouseDrag], owner: self, userInfo: nil)
