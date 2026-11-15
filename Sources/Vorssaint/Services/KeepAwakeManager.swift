@@ -208,9 +208,6 @@ final class KeepAwakeManager: ObservableObject {
         guard AppFeature.keepAwake.isAvailable else { return }
         switch command {
         case .off: stopByUser()
-        case .toggle: toggle()
-        case .on(let minutes?): activate(minutes: minutes)
-        case .on(nil): if !isActive { startLastPick() }
         }
     }
 
