@@ -191,13 +191,26 @@ final class KeepAwakeManager: ObservableObject {
     // MARK: - Session
 
     func toggle() {
-        if isActive {
-            if sessionTrigger == .automation || automationConditionsHold() {
-                automationSuppressedUntilConditionsClear = true
-            }
-            deactivate(reason: .manual)
-        } else {
-            startLastPick()
+        if isActive { stopByUser() } else { startLastPick() }
+    }
+
+    /// Ends the session as the person's own stop: automation that started
+    /// it stays off until its conditions clear.
+    func stopByUser() {
+        guard isActive else { return }
+        if sessionTrigger == .automation || automationConditionsHold() {
+            automationSuppressedUntilConditionsClear = true
+        }
+        deactivate(reason: .manual)
+    }
+
+    func perform(_ command: KeepAwakeURLCommand) {
+        guard AppFeature.keepAwake.isAvailable else { return }
+        switch command {
+        case .off: stopByUser()
+        case .toggle: toggle()
+        case .on(let minutes?): activate(minutes: minutes)
+        case .on(nil): if !isActive { startLastPick() }
         }
     }
 

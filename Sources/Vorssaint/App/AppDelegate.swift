@@ -69,6 +69,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     // MARK: - Lifecycle
 
+    /// vorssaint:// links, so an agent can run `open -g vorssaint://decaffeinate`.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            if let command = KeepAwakeURLCommand(url: url) { KeepAwakeManager.shared.perform(command) }
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         // Before any window exists, so nothing is ever built with the wrong

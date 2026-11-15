@@ -82,5 +82,16 @@
 	<string>© 2026 Vorssaint</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.vorssaint.utils.automation</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>vorssaint</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

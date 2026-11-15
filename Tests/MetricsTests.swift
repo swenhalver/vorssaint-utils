@@ -251,6 +251,20 @@ struct MetricsTests {
                 MenuPanelToggleLabelContract.run(suite)
                 KeepAwakeLidSleepTests.run { suite.expect($0, $1) }
                 KeepAwakeTimerHandoffTests.run { suite.expect($0, $1) }
+                let parse = { KeepAwakeURLCommand(url: URL(string: $0)!) }
+                suite.expect(parse("vorssaint://decaffeinate") == .off && parse("VORSSAINT://Decaffeinate") == .off
+                             && parse("vorssaint://keep-awake/off") == .off && parse("vorssaint://keep-awake/stop") == .off,
+                             "decaffeinate and keep-awake/off end Keep Awake")
+                suite.expect(parse("vorssaint://caffeinate") == .on(minutes: nil)
+                             && parse("vorssaint://caffeinate?minutes=30") == .on(minutes: 30)
+                             && parse("vorssaint://keep-awake/on?minutes=90") == .on(minutes: 90)
+                             && parse("vorssaint://keep-awake/toggle") == .toggle,
+                             "caffeinate starts Keep Awake, for the last pick or the given minutes")
+                suite.expect(parse("vorssaint://caffeinate?minutes=0") == nil && parse("vorssaint://caffeinate?minutes=x") == nil
+                             && parse("vorssaint://keep-awake") == nil && parse("vorssaint://keep-awake/off/now") == nil
+                             && parse("vorssaint://decaffeinate/now") == nil && parse("vorssaint://other/off") == nil
+                             && parse("https://decaffeinate") == nil,
+                             "anything else is no Keep Awake command")
             }),
             ("wallpaper", {
                 WallpaperContract.run(suite)

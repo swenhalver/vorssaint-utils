@@ -2520,6 +2520,7 @@ def main():
     keep_awake_methods = [
         "    func refreshPasswordlessStatus(",
         "    func toggle(",
+        "    func stopByUser(",
         "    func syncWithFeatures(",
         "    func activate(minutes:",
         "    func activate(until date:",

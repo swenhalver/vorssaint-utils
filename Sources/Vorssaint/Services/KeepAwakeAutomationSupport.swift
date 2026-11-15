@@ -137,3 +137,39 @@ enum KeepAwakeAutomationSupport {
         return sessionActive ? .none : .activate
     }
 }
+
+/// Keep Awake commands an agent or script can send without touching the UI:
+/// `open -g vorssaint://decaffeinate` ends the session,
+/// `open -g "vorssaint://caffeinate?minutes=30"` starts one (no minutes:
+/// the last pick), and `vorssaint://keep-awake/off|on|toggle` say the same.
+enum KeepAwakeURLCommand: Equatable {
+    case off
+    case on(minutes: Int?)
+    case toggle
+
+    init?(url: URL) {
+        guard url.scheme?.lowercased() == "vorssaint", let host = url.host?.lowercased() else { return nil }
+        let path = url.pathComponents.filter { $0 != "/" }.map { $0.lowercased() }
+        let verb: String
+        switch host {
+        case "decaffeinate": verb = "off"
+        case "caffeinate": verb = "on"
+        case "keep-awake", "keepawake":
+            guard path.count == 1 else { return nil }
+            verb = path[0]
+        default: return nil
+        }
+        if host == "decaffeinate" || host == "caffeinate" { guard path.isEmpty else { return nil } }
+        switch verb {
+        case "off", "stop": self = .off
+        case "toggle": self = .toggle
+        case "on", "start":
+            let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name.lowercased() == "minutes" }?.value
+            guard let value else { self = .on(minutes: nil); return }
+            guard let minutes = Int(value), minutes > 0, minutes <= 7 * 24 * 60 else { return nil }
+            self = .on(minutes: minutes)
+        default: return nil
+        }
+    }
+}
