@@ -255,7 +255,9 @@ final class ScreenCaptureService: ObservableObject {
         }
 
         let showsCaptureMenu = selected.showsCaptureMenu(fromShortcut: fromShortcut)
-        let delay = selected == .screenshot || selected == .scrolling
+        // A screenshot's timer runs after the pick (ScreenshotSelectionController);
+        // a scrolling capture's still runs before the surface opens.
+        let delay = selected == .scrolling
             ? ScreenshotSupport.sanitizedDelay(
                 UserDefaults.standard.integer(forKey: DefaultsKey.screenshotDelay))
             : 0

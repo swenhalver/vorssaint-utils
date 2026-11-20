@@ -2234,6 +2234,8 @@ def main():
           + "extension ScreenshotSelectionRefreshContract.Chooser {\n"
           + declaration(selection, "    fileprivate func setSelectionInProgress(").replace("fileprivate func", "func", 1)
           + declaration(selection, "    private var activeMode:").replace("private var", "var", 1)
+          + declaration(selection, "    private var pickDelay:").replace("private var", "var", 1)
+              .replace("UserDefaults.standard", "ReviewDefaults.current")
           + declaration(selection, "    fileprivate var acceptsCaptureInput:").replace("fileprivate var", "var", 1)
           + declaration(selection, "    fileprivate var offersScrollingCapture:").replace("fileprivate var", "var", 1)
           + declaration(selection, "    fileprivate var offersFullScreenCapture:").replace("fileprivate var", "var", 1)

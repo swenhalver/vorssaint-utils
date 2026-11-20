@@ -225,8 +225,9 @@ struct CaptureOptionsCard: View {
                 }
             }
             // The recorder's countdown runs after Record, as on macOS. The
-            // screenshot delay runs before this surface opens, so choosing
-            // one here starts the capture over through that countdown.
+            // screenshot timer runs after the pick, so choosing one here only
+            // sets it; a scrolling capture's runs before this surface opens,
+            // so that one starts the capture over through the countdown.
             if tool == .screenshot || tool == .scrolling {
                 section(strings.timerLabel) {
                     ForEach(ScreenshotSupport.allowedDelays, id: \.self) { seconds in
@@ -236,7 +237,9 @@ struct CaptureOptionsCard: View {
                                 : String(format: recorderStrings.countdownSecondsFormat, seconds),
                             checked: ScreenshotSupport.sanitizedDelay(screenshotDelay) == seconds) {
                             screenshotDelay = seconds
-                            if seconds > 0 { ScreenCaptureService.shared.restartThroughDelay() }
+                            if seconds > 0, tool == .scrolling {
+                                ScreenCaptureService.shared.restartThroughDelay()
+                            }
                         }
                     }
                 }

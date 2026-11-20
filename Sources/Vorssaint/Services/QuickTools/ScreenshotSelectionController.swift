@@ -287,6 +287,29 @@ final class ScreenshotSelectionController {
         }
     }
 
+    /// The screenshot timer runs after the pick, as macOS's does: the area,
+    /// window or screen is chosen first, the surface leaves, and the shot is
+    /// taken live when the countdown ends, so a menu or hover state opened
+    /// meanwhile is in it. Read at the pick, since the toolbar's Options can
+    /// change it mid-session.
+    private var pickDelay: Int {
+        guard !scrollingCaptureEnabled,
+              activeTool == .screenshot || (activeTool == nil && baseMode == .image) else { return 0 }
+        return ScreenshotSupport.sanitizedDelay(
+            UserDefaults.standard.integer(forKey: DefaultsKey.screenshotDelay))
+    }
+
+    /// Shows the timer's countdown with the surface already gone. False when
+    /// the session ended meanwhile (Escape, or the shortcut pressed again).
+    private func countDown(_ seconds: Int) async -> Bool {
+        for remaining in stride(from: seconds, to: 0, by: -1) {
+            guard !finished else { return false }
+            QuickToolHUD.showCountdown(remaining)
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        return !finished
+    }
+
     /// Builds the surface before anyone asks for it: every panel laid out
     /// and drawn, waiting off screen, so `begin` only has to show them.
     /// Building is most of what opening costs, and far more on a Mac short
@@ -959,11 +982,13 @@ final class ScreenshotSelectionController {
             finish(.region(region(fromView: viewRect, on: panel, windowID: nil)))
             return
         }
+        let delay = pickDelay
+        let frozenImage = delay == 0 ? panel.frozenImage : nil
         let pixelRect = ScreenshotSupport.imagePixelRect(
             fromView: viewRect,
             viewSize: panel.screenFrame.size,
-            imageSize: panel.frozenImageSize ?? panel.pixelSize)
-        if let frozen = panel.frozenImage {
+            imageSize: frozenImage == nil ? panel.pixelSize : (panel.frozenImageSize ?? panel.pixelSize))
+        if let frozen = frozenImage {
             guard let cropped = frozen.cropping(to: pixelRect) else {
                 finish(.failed)
                 return
@@ -980,7 +1005,8 @@ final class ScreenshotSelectionController {
                         scale: panel.pixelScale,
                         anchorRect: ScreenshotSupport.cocoaRect(
                             fromFlippedView: viewRect,
-                            screenFrame: panel.screenFrame))
+                            screenFrame: panel.screenFrame),
+                        delay: delay)
         }
     }
 
@@ -997,8 +1023,14 @@ final class ScreenshotSelectionController {
             finish(.region(region(fromView: frame, on: panel, windowID: windowID)))
             return
         }
+        let delay = pickDelay
+        if delay > 0 { retirePanels() }
         Task { @MainActor [weak self] in
             guard let self else { return }
+            if delay > 0 {
+                guard await self.countDown(delay) else { return }
+                try? await Task.sleep(nanoseconds: 120_000_000)
+            }
             // A composite with an attached dialog may be captured at another
             // display's scale than this panel's; record the one it has.
             guard let capture = await ScreenshotCaptureEngine.captureWindow(
@@ -1034,7 +1066,8 @@ final class ScreenshotSelectionController {
             finish(scrollingCaptureEnabled ? .scrollingRegion(selected) : .region(selected))
             return
         }
-        if let frozen = panel.frozenImage {
+        let delay = pickDelay
+        if delay == 0, let frozen = panel.frozenImage {
             finish(.captured(Capture(image: frozen,
                                      scale: panel.pixelScale,
                                      anchorRect: panel.screenFrame)))
@@ -1042,7 +1075,8 @@ final class ScreenshotSelectionController {
             captureLive(displayID: panel.displayID,
                         pixelRect: nil,
                         scale: panel.pixelScale,
-                        anchorRect: panel.screenFrame)
+                        anchorRect: panel.screenFrame,
+                        delay: delay)
         }
     }
 
@@ -1078,11 +1112,14 @@ final class ScreenshotSelectionController {
     private func captureLive(displayID: CGDirectDisplayID,
                              pixelRect: CGRect?,
                              scale: CGFloat,
-                             anchorRect: CGRect) {
+                             anchorRect: CGRect,
+                             delay: Int = 0) {
         retirePanels()
         Task { @MainActor [weak self] in
             guard let self else { return }
+            if delay > 0 { guard await self.countDown(delay) else { return } }
             try? await Task.sleep(nanoseconds: 120_000_000)
+            guard !self.finished else { return }
             guard var image = await ScreenshotCaptureEngine.captureDisplay(
                 displayID,
                 includePointer: self.includePointer,

@@ -30,12 +30,14 @@ enum ScreenshotSelectionRefreshContract {
     }
     enum DefaultsKey {
         static let screenshotFreeze = "freeze", screenshotIncludePointer = "pointer",
-            screenshotHideVorssaintWindows = "hide"
+            screenshotHideVorssaintWindows = "hide", screenshotDelay = "delay"
     }
     struct ReviewDefaults {
         static var current = ReviewDefaults()
         var values: [String: Bool] = ["freeze": true, "pointer": false, "hide": false]
+        var delay = 0
         func bool(forKey key: String) -> Bool { values[key] ?? false }
+        func integer(forKey key: String) -> Int { key == "delay" ? delay : 0 }
     }
     struct NSScreen {
         static let screens = [NSScreen()]
@@ -226,9 +228,16 @@ enum ScreenshotSelectionRefreshContract {
             self.outcome = outcome
             finished = true
         }
+        var liveDelays: [Int] = []
+        func retirePanels() {}
+        func countDown(_ seconds: Int) async -> Bool { !finished }
         func captureLive(
-            displayID: CGDirectDisplayID, pixelRect: CGRect?, scale: CGFloat, anchorRect: CGRect
-        ) { finish(.captured(Capture(image: CGImage(excluded: []), scale: scale, anchorRect: anchorRect))) }
+            displayID: CGDirectDisplayID, pixelRect: CGRect?, scale: CGFloat, anchorRect: CGRect,
+            delay: Int = 0
+        ) {
+            liveDelays.append(delay)
+            finish(.captured(Capture(image: CGImage(excluded: []), scale: scale, anchorRect: anchorRect)))
+        }
     }
 
     enum QuickToolsSupport {
@@ -377,6 +386,24 @@ enum ScreenshotSelectionRefreshContract {
         scrolling.captureFullScreenFromControl(on: scrolling.panels[0])
         expect(scrolling.outcome == nil,
                "scrolling capture keeps its region workflow instead of taking a full-screen capture")
+        // The screenshot timer runs after the pick and photographs the screen
+        // live then, even over a frozen surface; without one the frozen
+        // picture is used as before.
+        ReviewDefaults.current.delay = 3
+        let timedArea = Chooser(.screenshot)
+        timedArea.confirmRegion(CGRect(x: 0, y: 0, width: 20, height: 20), on: timedArea.panels[0])
+        let timedScreen = Chooser(.screenshot)
+        timedScreen.captureFullScreenFromControl(on: timedScreen.panels[0])
+        let timedRecording = Chooser(.recording)
+        timedRecording.confirmRegion(CGRect(x: 0, y: 0, width: 20, height: 20), on: timedRecording.panels[0])
+        ReviewDefaults.current.delay = 0
+        let untimedArea = Chooser(.screenshot)
+        untimedArea.confirmRegion(CGRect(x: 0, y: 0, width: 20, height: 20), on: untimedArea.panels[0])
+        expect(timedArea.liveDelays == [3] && timedScreen.liveDelays == [3],
+               "a timed screenshot counts down after the pick and is taken live")
+        expect(timedRecording.liveDelays.isEmpty && untimedArea.liveDelays.isEmpty
+                   && untimedArea.panels[0].frozenImage != nil,
+               "the screenshot timer leaves recordings and untimed frozen picks alone")
         let placement = Chooser(.screenshot)
         placement.placeFullScreenControlBelowNotch(
             screenFrame: placement.panels[1].screenFrame,
